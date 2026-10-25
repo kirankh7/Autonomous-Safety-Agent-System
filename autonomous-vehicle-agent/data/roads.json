@@ -1,0 +1,45 @@
+{
+  "_note": "Synthetic, simplified road network loosely based on Dublin, California. Coordinates are approximate and for demonstration only.",
+  "segments": [
+    {
+      "id": "ROAD-01",
+      "name": "I-580",
+      "forward_label": "Eastbound",
+      "reverse_label": "Westbound",
+      "speed_limit_kmh": 105,
+      "points": [[37.7035, -121.9650], [37.7030, -121.9300], [37.7025, -121.9000], [37.7010, -121.8700]]
+    },
+    {
+      "id": "ROAD-02",
+      "name": "I-680",
+      "forward_label": "Southbound",
+      "reverse_label": "Northbound",
+      "speed_limit_kmh": 105,
+      "points": [[37.7400, -121.9330], [37.7200, -121.9300], [37.7030, -121.9290], [37.6850, -121.9200]]
+    },
+    {
+      "id": "ROAD-03",
+      "name": "Dublin Blvd",
+      "forward_label": "Eastbound",
+      "reverse_label": "Westbound",
+      "speed_limit_kmh": 65,
+      "points": [[37.7065, -121.9450], [37.7058, -121.9200], [37.7052, -121.8950], [37.7046, -121.8750]]
+    },
+    {
+      "id": "ROAD-04",
+      "name": "Dougherty Rd",
+      "forward_label": "Southbound",
+      "reverse_label": "Northbound",
+      "speed_limit_kmh": 65,
+      "points": [[37.7400, -121.9150], [37.7250, -121.9130], [37.7085, -121.9100]]
+    },
+    {
+      "id": "ROAD-05",
+      "name": "Tassajara Rd",
+      "forward_label": "Southbound",
+      "reverse_label": "Northbound",
+      "speed_limit_kmh": 75,
+      "points": [[37.7450, -121.8700], [37.7250, -121.8710], [37.7055, -121.8720]]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "_note": "Eight synthetic autonomous vehicles. position_m is the distance along the road segment from its first point; direction is 'forward' or 'reverse' (see roads.json labels).",
+  "vehicles": [
+    {"id": "CAR-001", "name": "Vehicle A", "model": "Robotaxi sedan", "segment": "ROAD-01", "direction": "forward", "position_m": 1200, "speed_kmh": 85, "sensors": ["camera", "lidar", "radar"]},
+    {"id": "CAR-002", "name": "Vehicle B", "model": "Robotaxi sedan", "segment": "ROAD-01", "direction": "forward", "position_m": 900, "speed_kmh": 80, "sensors": ["camera", "lidar", "radar"]},
+    {"id": "CAR-003", "name": "Vehicle C", "model": "Delivery van", "segment": "ROAD-03", "direction": "forward", "position_m": 600, "speed_kmh": 60, "sensors": ["camera", "radar"]},
+    {"id": "CAR-004", "name": "Vehicle D", "model": "Shuttle", "segment": "ROAD-02", "direction": "forward", "position_m": 1500, "speed_kmh": 90, "sensors": ["camera", "lidar"]},
+    {"id": "CAR-005", "name": "Vehicle E", "model": "Robotaxi SUV", "segment": "ROAD-02", "direction": "reverse", "position_m": 3000, "speed_kmh": 95, "sensors": ["camera", "lidar", "radar"]},
+    {"id": "CAR-006", "name": "Vehicle F", "model": "Freight truck", "segment": "ROAD-04", "direction": "forward", "position_m": 500, "speed_kmh": 55, "sensors": ["camera", "radar"]},
+    {"id": "CAR-007", "name": "Vehicle G", "model": "Robotaxi SUV", "segment": "ROAD-05", "direction": "forward", "position_m": 700, "speed_kmh": 65, "sensors": ["camera", "lidar", "radar"]},
+    {"id": "CAR-008", "name": "Vehicle H", "model": "Delivery van", "segment": "ROAD-04", "direction": "reverse", "position_m": 2500, "speed_kmh": 50, "sensors": ["radar"]}
+  ]
+}

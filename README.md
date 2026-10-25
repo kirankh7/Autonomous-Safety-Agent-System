@@ -74,3 +74,7 @@ Over time, this feedback loop would allow the system to improve how it evaluates
 The long-term vision is to create a shared safety intelligence layer across autonomous vehicles. Instead of every vehicle relying only on what its own sensors can currently see, vehicles could benefit from verified observations collected by other vehicles.
 
 The system could eventually provide a continuously updated understanding of road conditions and unexpected hazards, helping autonomous vehicles respond earlier to situations that may not yet be visible to their own sensors.
+
+## Working Prototype
+
+The working agent application (FastAPI + LangGraph backend, React dashboard) lives in [`autonomous-vehicle-agent/`](autonomous-vehicle-agent/README.md). See its README for how to run it and how to demonstrate the five hazard scenarios.
