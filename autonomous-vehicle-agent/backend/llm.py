@@ -1,8 +1,9 @@
-"""Language model used to phrase Research Assistant answers.
+"""Language model settings for the Research Assistant.
 
 LLM_PROVIDER=mock (default) needs no API key: answers are composed from templates over the
-retrieved records. LLM_PROVIDER=anthropic or openai sends the same records to a real model,
-which must answer only from them. If a real call fails, the caller falls back to the mock answer.
+retrieved records. LLM_PROVIDER=anthropic runs Claude as a tool-calling agent (research_agent.py).
+LLM_PROVIDER=openai sends the retrieved records to an OpenAI model, which phrases the answer.
+If a real call fails, the caller falls back to the mock answer.
 """
 import os
 
@@ -19,37 +20,35 @@ def provider() -> str:
     return os.getenv("LLM_PROVIDER", "mock").strip().lower()
 
 
-def generate(question: str, records: list[str]) -> str | None:
-    """Return a grounded answer from a real LLM, or None to use the mock answer."""
+def has_credentials() -> bool:
+    """True if the selected real provider has an API key configured."""
+    mode = provider()
+    if mode == "anthropic":
+        return bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")
+                    or os.getenv("ANTHROPIC_API_KEY_HELPER"))
+    if mode == "openai":
+        return bool(os.getenv("OPENAI_API_KEY"))
+    return False
+
+
+def status() -> str:
+    """Human-readable LLM mode for the dashboard."""
     mode = provider()
     if mode == "mock":
+        return "mock"
+    if not has_credentials():
+        return f"mock ({mode} selected but no API key set)"
+    if mode == "anthropic":
+        return f"anthropic agent ({os.getenv('ANTHROPIC_MODEL', 'claude-opus-5-5')})"
+    return f"openai ({os.getenv('OPENAI_MODEL', 'gpt-4o-mini')})"
+
+
+def generate(question: str, records: list[str]) -> str | None:
+    """Return a grounded answer from a real LLM, or None to use the mock answer."""
+    if provider() != "openai":
         return None
     prompt = "Records:\n" + "\n".join(f"- {r}" for r in records) + f"\n\nQuestion: {question}"
-    if mode == "anthropic":
-        return _anthropic(prompt)
-    if mode == "openai":
-        return _openai(prompt)
-    return None
-
-
-def _anthropic(prompt: str) -> str | None:
-    import anthropic
-
-    client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from the environment
-    response = client.beta.messages.create(
-        model=os.getenv("ANTHROPIC_MODEL", "claude-opus-5-5"),
-        max_tokens=2048,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": prompt}],
-        output_config={"effort": "low"},
-        # Server-side fallback: if the model declines, the API retries on a suitable model.
-        betas=["server-side-fallback-2026-07-01"],
-        fallbacks="default",
-    )
-    if response.stop_reason == "refusal":
-        return None
-    text = "".join(block.text for block in response.content if block.type == "text").strip()
-    return text or None
+    return _openai(prompt)
 
 
 def _openai(prompt: str) -> str | None:

@@ -242,6 +242,22 @@ def list_alerts(a: Answer) -> None:
 # ---------- Entry point ----------
 
 def ask(question: str) -> dict:
+    """Answer a question. With LLM_PROVIDER=anthropic and an API key, Claude runs as a
+    tool-calling agent (research_agent.py); otherwise the rule-based assistant below answers."""
+    if llm.provider() == "anthropic" and llm.has_credentials():
+        from backend import research_agent
+        try:
+            result = research_agent.ask(question)
+            return {"question": question, "mode": f"anthropic agent ({result['model']})",
+                    "intent": "llm_tool_use", **result}
+        except Exception as exc:  # fall back to the rule-based assistant
+            fallback = rule_based_ask(question)
+            fallback["answer"] += f"\n\n(Claude agent unavailable: {type(exc).__name__}: {exc}. Showing the rule-based answer.)"
+            return fallback
+    return rule_based_ask(question)
+
+
+def rule_based_ask(question: str) -> dict:
     q = question.lower()
     vehicle = _vehicle_from(question)
     hazard = _target_hazard(question, vehicle)
@@ -278,7 +294,7 @@ def ask(question: str) -> dict:
     mock_answer = "\n".join(a.lines)
     mode = llm.provider()
     answer = None
-    if mode != "mock":
+    if mode == "openai" and llm.has_credentials():
         try:
             answer = llm.generate(question, a.records + a.lines)
         except Exception as exc:  # fall back to the grounded mock answer
@@ -290,4 +306,5 @@ def ask(question: str) -> dict:
         "intent": a.intent,
         "evidence": list(a.evidence.values()),
         "tools_used": a.tools,
+        "agent_steps": [],
     }

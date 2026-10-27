@@ -171,7 +171,7 @@ def verify_hazard(hazard: dict, report: dict, is_new: bool, history_delta: float
     if is_new:
         changes.append((FIRST_REPORT, f"First report from {vid}: starting confidence 0.50"))
         h["confirming_vehicles"].append(vid)
-        if history_delta:
+        if history_reason:  # recorded even when it is +0.00, so every rule applied is visible
             changes.append((history_delta, history_reason))
     elif report["hazard_type"] == "road_clear":
         if vid in h["clear_vehicles"]:

@@ -16,8 +16,8 @@ export default function AnswerView({ answer }: { answer: ResearchAnswer }) {
       <div className="space-y-1 text-sm leading-relaxed text-ink">
         {answer.answer.split("\n").map((line, i) => (
           <p key={i} className={line.startsWith("- ") ? "pl-3 text-ink-2" : ""}>
-            {line.split(/(\[[A-Z]+-\d+\])/g).map((part, j) => {
-              const id = part.match(/^\[([A-Z]+-\d+)\]$/)?.[1];
+            {line.split(/\b((?:HZ|RPT|ALT|INC)-\d{3})\b/g).map((part, j) => {
+              const id = /^(?:HZ|RPT|ALT|INC)-\d{3}$/.test(part) ? part : undefined;
               if (!id) return <span key={j}>{part}</span>;
               return (
                 <button key={j} onClick={() => setFocus(focus === id ? null : id)}
@@ -31,6 +31,30 @@ export default function AnswerView({ answer }: { answer: ResearchAnswer }) {
         ))}
       </div>
       {focus && byId.get(focus) && <EvidenceCard e={byId.get(focus)!} highlight />}
+
+      {answer.unverified_citations && answer.unverified_citations.length > 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-warning/60 bg-warning/10 p-2 text-xs">
+          <TriangleAlert size={14} color="#fab219" />
+          Citation check: {answer.unverified_citations.join(", ")} did not appear in any tool result.
+        </div>
+      )}
+
+      {answer.agent_steps && answer.agent_steps.length > 0 && (
+        <details open className="rounded-lg border border-hairline bg-page/50 p-2">
+          <summary className="cursor-pointer text-xs font-medium text-ink-2">
+            Claude's tool calls ({answer.agent_steps.length}): reason, act, observe
+          </summary>
+          <ol className="mt-2 space-y-1.5">
+            {answer.agent_steps.map((s, i) => (
+              <li key={i} className="text-xs">
+                {s.reason && <div className="text-ink-2">{s.reason}</div>}
+                <code className="text-s1">{i + 1}. {s.tool}({Object.entries(s.input).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(", ")})</code>
+                <span className="text-muted"> &rarr; {s.result}</span>
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
         <span className="rounded bg-page px-2 py-0.5">answer mode: {answer.mode}</span>

@@ -70,7 +70,7 @@ def get_state():
         },
         "incident_types": _count(incidents, "hazard_type"),
         "simulation": simulation.status(),
-        "config": {"llm_provider": llm.provider(), "embeddings": EMBEDDINGS,
+        "config": {"llm_provider": llm.status(), "embeddings": EMBEDDINGS,
                    "rules": {"first_report": T.FIRST_REPORT, "confirmation": T.CONFIRMATION,
                              "road_clear": T.ROAD_CLEAR, "history_per_incident": T.HISTORY_PER_INCIDENT,
                              "history_cap": T.HISTORY_CAP, "verified_at": T.VERIFIED_AT,

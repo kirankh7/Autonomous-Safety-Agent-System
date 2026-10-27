@@ -104,6 +104,8 @@ export interface ResearchAnswer {
   intent: string;
   evidence: Evidence[];
   tools_used: string[];
+  agent_steps?: { reason: string; tool: string; input: Record<string, unknown>; result: string }[];
+  unverified_citations?: string[];
 }
 
 export interface LogEntry {

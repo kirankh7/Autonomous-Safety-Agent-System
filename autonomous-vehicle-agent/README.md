@@ -208,9 +208,21 @@ lists the record IDs it used as evidence:
 - `ALT-…` alerts
 - `INC-…` incidents
 
-With the default mock LLM, answers are assembled from those records. With `LLM_PROVIDER=anthropic` or `openai`,
-the same records are sent to a real model with instructions to answer only from them and cite IDs. If the call
-fails, the mock answer is shown.
+It runs in one of two modes:
+
+- **Rule-based (default, no API key).** Keyword rules pick the question type, then the answer is assembled from
+  the matching records.
+- **Claude tool-calling agent (`LLM_PROVIDER=anthropic`).** Claude gets eight read-only tools over memory
+  (`list_hazards`, `get_hazard`, `get_vehicle_reports`, `get_alerts`, `get_vehicle`,
+  `find_approaching_vehicles`, `retrieve_similar_incidents`, `list_learned_incidents`). It decides which tools to
+  call and in what order: a ReAct loop of reason, call a tool, observe the result, repeat
+  (`backend/research_agent.py`).
+  - The dashboard shows every tool call Claude made.
+  - A citation check flags any ID in the answer that no tool returned.
+  - If the API call fails, the rule-based answer is shown instead.
+
+**Design choice:** the LLM is autonomous only on the research side. Safety decisions (confidence, alerts) stay
+rule-based and deterministic. Claude can read memory, but it cannot send alerts or change scores.
 
 ## 5. How to run
 
@@ -234,9 +246,18 @@ npm run dev            # opens http://localhost:5173 (proxies /api to port 8000)
 **Single-server option:** run `npm run build` in `frontend/`, then start uvicorn. The backend serves the
 dashboard at http://localhost:8000.
 
-**Optional real LLM:** copy `.env.example` to `.env` and set:
-- `LLM_PROVIDER=anthropic` with `ANTHROPIC_API_KEY` (default model `claude-opus-5-5`), or
-- `LLM_PROVIDER=openai` with `OPENAI_API_KEY` and `OPENAI_MODEL`.
+**Claude agent mode (optional):**
+1. Copy `.env.example` to `.env`.
+2. Set `LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY=<your key>`. The default model is `claude-opus-5-5`;
+   change it with `ANTHROPIC_MODEL`.
+3. Restart uvicorn. The sidebar then shows `LLM: anthropic agent (...)`.
+
+To go through an API gateway instead of a direct key, set `ANTHROPIC_BASE_URL` (the gateway URL),
+`ANTHROPIC_API_KEY_HELPER` (a command that prints a token, run at request time and cached for 5 minutes) and,
+if needed, `ANTHROPIC_CA_BUNDLE` (a corporate CA certificate file).
+
+Without a key it stays in rule-based mode. (`LLM_PROVIDER=openai` with `OPENAI_API_KEY` is also supported, but
+there the model only rewords the rule-based answer.)
 
 **Tests:**
 

@@ -111,3 +111,43 @@ def test_api_runs_a_full_scenario():
     state = client.get("/api/state").json()
     assert state["stats"]["incidents_learned"] == 1
     assert state["hazards"][0]["status"] == "resolved"
+
+
+def test_claude_research_agent_loop_with_fake_client(monkeypatch):
+    """The tool-calling loop runs tools Claude asks for and only accepts citations it has seen."""
+    from types import SimpleNamespace as NS
+
+    from backend import research_agent
+
+    report("CAR-001", 500)
+    report("CAR-002", 450, t=40)
+    turns = [
+        NS(stop_reason="tool_use", content=[
+            NS(type="text", text="Find the alert first."),
+            NS(type="tool_use", id="t1", name="get_alerts",
+               input={"vehicle_id": "CAR-003", "hazard_id": ""})]),
+        NS(stop_reason="tool_use", content=[
+            NS(type="tool_use", id="t2", name="get_vehicle_reports", input={"hazard_id": "HZ-001"})]),
+        NS(stop_reason="end_turn", content=[NS(type="text", text=(
+            "CAR-003 got [ALT-003] because CAR-001 [RPT-001] and CAR-002 [RPT-002] reported "
+            "[HZ-001]. See also [INC-999]."))]),
+    ]
+    sent = []
+
+    class FakeMessages:
+        def create(self, **kwargs):
+            sent.append(kwargs)
+            return turns[len(sent) - 1]
+
+    class FakeClient:
+        beta = NS(messages=FakeMessages())
+
+    monkeypatch.setattr(research_agent, "make_client", lambda: FakeClient())
+    result = research_agent.ask("Why was an alert generated for Vehicle C?")
+
+    assert [s["tool"] for s in result["agent_steps"]] == ["get_alerts", "get_vehicle_reports"]
+    assert {e["id"] for e in result["evidence"]} == {"ALT-003", "RPT-001", "RPT-002", "HZ-001"}
+    assert result["unverified_citations"] == ["INC-999"]      # cited but never returned by a tool
+    # messages: question, assistant tool call, tool result for t1, assistant, tool result for t2
+    history = sent[-1]["messages"]
+    assert [m["content"][0]["tool_use_id"] for m in history[2::2]] == ["t1", "t2"]
