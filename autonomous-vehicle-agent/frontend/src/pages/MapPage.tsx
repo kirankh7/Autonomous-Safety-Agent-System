@@ -18,7 +18,7 @@ export default function MapPage({ state }: { state: AppState }) {
       <div className="space-y-4 overflow-y-auto">
         <Panel title="Legend">
           <ul className="space-y-1.5 text-xs text-ink-2">
-            <li className="flex items-center gap-2"><Dot color={VEHICLE_COLOR} /> Vehicle (label = callsign)</li>
+            <li className="flex items-center gap-2"><Dot color={VEHICLE_COLOR} /> Vehicle (label = car name)</li>
             <li className="flex items-center gap-2"><Ring color={STATUS.critical} /> Vehicle ring = last message received</li>
             {["verified", "caution", "wait", "resolved"].map((d) => {
               const s = decisionStatus(d, d === "resolved" ? "resolved" : "active");

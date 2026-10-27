@@ -2,6 +2,7 @@ import { Bell, Car, Database, ShieldCheck, TriangleAlert } from "lucide-react";
 import type { AppState, Run } from "../types";
 import { ConfidenceChart, HazardTypeChart } from "../components/Charts";
 import { AlertRow, SignalStrip } from "../components/Signals";
+import { AgentLegend } from "../components/TraceTimeline";
 import { Panel, StatCard, StatusBadge, decisionStatus, fmtType } from "../components/ui";
 
 // Routine bookkeeping signals hidden from the summary view.
@@ -33,6 +34,7 @@ export default function Dashboard({ state, runs, go }: { state: AppState; runs: 
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel title="Recent agent signals" className="lg:col-span-2"
                action={<button onClick={() => go("activity")} className="text-xs text-s1 hover:underline">Open timeline</button>}>
+          <div className="mb-2"><AgentLegend /></div>
           {runs.length === 0 && <p className="text-sm text-muted">No agent activity yet. Start a scenario on the Hazard Simulation page.</p>}
           <ul className="divide-y divide-grid">
             {runs.slice(-6).reverse().map((r) => (

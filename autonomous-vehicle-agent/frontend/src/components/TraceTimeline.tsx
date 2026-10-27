@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ChevronRight, Wrench } from "lucide-react";
 import type { TraceStep } from "../types";
 import { SignalChip } from "./Signals";
-import { AGENT_COLORS } from "./ui";
+import { AGENT_COLORS, AGENT_NUMBER } from "./ui";
 
 export { AGENT_COLORS };
 
@@ -18,17 +18,25 @@ export const STAGES = [
 ];
 
 
-const AGENT_SHORT: Record<string, string> = {
-  "Hazard Analysis Agent": "Analysis", "Research & Memory Agent": "Research & Memory",
-  "Verification Agent": "Verification", "Alert Agent": "Alert",
-};
-
-export function AgentTag({ agent, short }: { agent: string; short?: boolean }) {
+/** Proper agent name with its number and identity colour, e.g. "2 · Verification Agent". */
+export function AgentTag({ agent }: { agent: string }) {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs font-medium text-ink" title={agent}>
-      <span className="h-2 w-2 rounded-full" style={{ background: AGENT_COLORS[agent] ?? "#898781" }} />
-      {short ? AGENT_SHORT[agent] ?? agent : agent}
+    <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs font-medium text-ink">
+      <span className="flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold text-white"
+            style={{ background: AGENT_COLORS[agent] ?? "#898781" }}>
+        {AGENT_NUMBER[agent] ?? "?"}
+      </span>
+      {agent}
     </span>
+  );
+}
+
+/** Colour key for the agent dots used in signal strips. */
+export function AgentLegend() {
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1">
+      {Object.keys(AGENT_NUMBER).map((name) => <AgentTag key={name} agent={name} />)}
+    </div>
   );
 }
 
@@ -80,11 +88,11 @@ export default function TraceTimeline({ steps, stageFilter, expandAll = false }:
                     className="w-full rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-left hover:border-axis">
               <div className="flex items-center gap-3">
                 <span className="w-4 shrink-0 text-xs text-muted tabular">{s.step}</span>
-                <span className="w-36 shrink-0 text-[11px] font-semibold uppercase leading-tight tracking-wide text-ink-2">{label(s.stage)}</span>
-                <span className="min-w-0 flex-1">
+                <span className="w-32 shrink-0 text-[11px] font-semibold uppercase leading-tight tracking-wide text-ink-2">{label(s.stage)}</span>
+                <span className="flex min-w-0 flex-1 overflow-hidden">
                   {s.signal ? <SignalChip signal={s.signal} /> : <span className="truncate text-xs text-ink-2">{s.result}</span>}
                 </span>
-                <AgentTag agent={s.agent} short />
+                <span className="w-48 shrink-0"><AgentTag agent={s.agent} /></span>
               </div>
               {expanded && (
                 <div className="mt-2 grid gap-1.5 border-t border-hairline pt-2 text-sm">

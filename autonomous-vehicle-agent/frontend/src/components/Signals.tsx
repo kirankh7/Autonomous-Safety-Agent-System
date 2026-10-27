@@ -1,6 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import type { Alert, Signal, TraceStep } from "../types";
-import { AGENT_COLORS, STATUS, StatusBadge, alertStatus } from "./ui";
+import { AGENT_COLORS, AGENT_NUMBER, STATUS, StatusBadge, alertStatus } from "./ui";
 
 // Tone -> colour. Status tones carry meaning; "info" uses the vehicle/series blue.
 const TONE: Record<string, string> = {
@@ -11,12 +11,13 @@ const TONE: Record<string, string> = {
 export function SignalChip({ signal, big }: { signal: Signal; big?: boolean }) {
   const color = TONE[signal.tone] ?? TONE.neutral;
   return (
-    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border font-mono ${big ? "px-2.5 py-1 text-sm" : "px-2 py-0.5 text-[11px]"}`}
-          style={{ borderColor: `${color}99`, background: `${color}1f` }}>
-      <span className="font-semibold tracking-wide" style={{ color: signal.tone === "neutral" ? "#c3c2b7" : color }}>
+    <span className={`inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded-md border font-mono ${big ? "px-2.5 py-1 text-sm" : "px-2 py-0.5 text-[11px]"}`}
+          style={{ borderColor: `${color}99`, background: `${color}1f` }}
+          title={`${signal.label} ${signal.detail}`.trim()}>
+      <span className="shrink-0 font-semibold tracking-wide" style={{ color: signal.tone === "neutral" ? "#c3c2b7" : color }}>
         {signal.label}
       </span>
-      {signal.detail && <span className="text-ink-2">{signal.detail}</span>}
+      {signal.detail && <span className="min-w-0 truncate text-ink-2">{signal.detail}</span>}
     </span>
   );
 }
@@ -28,7 +29,8 @@ export function SignalStrip({ steps, skip = [] }: { steps: TraceStep[]; skip?: s
     <div className="flex flex-wrap items-center gap-1">
       {shown.map((s, i) => (
         <span key={`${s.run_id}-${s.step}`} className="inline-flex items-center gap-1">
-          <span className="h-1.5 w-1.5 rounded-full" title={s.agent} style={{ background: AGENT_COLORS[s.agent] }} />
+          <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-[9px] font-bold text-white"
+                title={s.agent} style={{ background: AGENT_COLORS[s.agent] }}>{AGENT_NUMBER[s.agent]}</span>
           <SignalChip signal={s.signal!} />
           {i < shown.length - 1 && <ChevronRight size={12} className="text-axis" />}
         </span>

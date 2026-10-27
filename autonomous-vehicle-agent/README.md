@@ -34,11 +34,11 @@ flowchart LR
     end
 
     subgraph Graph["LangGraph agent workflow"]
-        A1["Agent 1 · Hazard Analysis<br/>classify, locate, match events"]
-        A4a["Agent 4 · Research & Memory<br/>retrieve history (RAG)"]
-        A2["Agent 2 · Verification<br/>confidence rules, decision"]
-        A3["Agent 3 · Alert<br/>approaching vehicles, mock alerts"]
-        A4b["Agent 4 · Research & Memory<br/>update memory"]
+        A1["Agent 1 · Hazard Analysis Agent<br/>classify, locate, match events"]
+        A4a["Agent 4 · Research & Memory Agent<br/>retrieve history (RAG)"]
+        A2["Agent 2 · Verification Agent<br/>confidence rules, decision"]
+        A3["Agent 3 · Alert Agent<br/>approaching vehicles, mock alerts"]
+        A4b["Agent 4 · Research & Memory Agent<br/>update memory"]
         A1 -- new hazard --> A4a --> A2
         A1 -- update to existing hazard --> A2
         A1 -- clear report, nothing to clear --> A4b
@@ -51,7 +51,7 @@ flowchart LR
         VEC[("FAISS vector index<br/>incident embeddings")]
     end
 
-    RA["Research Assistant<br/>chat, grounded answers + cited IDs"]
+    RA["Research Assistant (Agent 4)<br/>chat, grounded answers + cited IDs"]
     UI["React dashboard<br/>map, simulation, timeline, chat"]
 
     R --> A1
@@ -73,7 +73,7 @@ flowchart LR
 | RAG | TF-IDF or sentence-transformer embeddings in a FAISS index (`backend/rag.py`) |
 | LLM | Mock by default; optional Anthropic or OpenAI (`backend/llm.py`) |
 | Frontend | React + Vite + TypeScript, Tailwind CSS, Recharts, Leaflet with OpenStreetMap |
-| Data | JSON files in `data/`: 8 vehicles (callsigns Orion, Falcon, Comet, Atlas, Nova, Titan, Echo, Pulse), 5 road segments, 20 incidents, 5 scenarios |
+| Data | JSON files in `data/`: 8 vehicles (named Tesla Model 3, Toyota Prius, Ford Transit, Mercedes Sprinter, Jaguar I-PACE, Volvo Truck, Hyundai Ioniq 5, Nissan Leaf), 5 road segments, 20 incidents, 5 scenarios |
 
 ```
 autonomous-vehicle-agent/
@@ -169,7 +169,7 @@ The agents' tools are plain Python functions in `backend/tools.py`:
 
 ### Memory
 - **Short-term memory** holds the live situation: vehicle positions, reports, active hazards, alerts sent and
-  traces. It is what links Falcon's confirmation to Orion's report 40 seconds earlier, and what stops
+  traces. It is what links Toyota Prius's confirmation to Tesla Model 3's report 40 seconds earlier, and what stops
   duplicate alerts. **Reset Scenario** clears it.
 - **Long-term memory** holds resolved incidents: 20 synthetic historical incidents plus every incident the agent
   learns during the session, each with its outcome (confirmed or false report) and a lesson. It persists across
@@ -279,16 +279,16 @@ The tests check that:
 
 Open **Hazard Simulation**, click a scenario card, then press **Next Step** to advance one agent decision at a
 time. Each step shows the agents' signals (for example `NEW HAZARD`, `HISTORY +0.15`, `VERIFIED 0.50 → 0.70`,
-`ALERT → Comet`), the confidence, the alerts sent and the live map. Click a trace step to see its full reasoning. **Reset Scenario** restarts the
+`ALERT → Ford Transit`), the confidence, the alerts sent and the live map. Click a trace step to see its full reasoning. **Reset Scenario** restarts the
 current scenario. **Reset All Memory** also forgets incidents learned during the session, so the numbers below
 are reproduced exactly.
 
 | # | Scenario | What to point out |
 |---|---|---|
-| 1 | **Stopped truck in fog** (main demo) | Orion reports, 0.50 (caution advisory to Comet) → Falcon confirms, 0.70 (**verified alert** to Comet, 1.1 km away). Atlas on the opposite carriageway is not alerted. Ask "Why was an alert generated for Comet?" → two road-clear reports bring it to 0.40, then **resolved**. An all-clear is sent and the incident is stored as `INC-021`. |
-| 2 | **Road accident** | I-680 has its own accident history (+0.10), so the first report is already 0.60. Two confirmations take it to 1.00. Northbound Nova is not alerted. |
+| 1 | **Stopped truck in fog** (main demo) | Tesla Model 3 reports, 0.50 (caution advisory to Ford Transit) → Toyota Prius confirms, 0.70 (**verified alert** to Ford Transit, 1.1 km away). Mercedes Sprinter on the opposite carriageway is not alerted. Ask "Why was an alert generated for Ford Transit?" → two road-clear reports bring it to 0.40, then **resolved**. An all-clear is sent and the incident is stored as `INC-021`. |
+| 2 | **Road accident** | I-680 has its own accident history (+0.10), so the first report is already 0.60. Two confirmations take it to 1.00. Northbound Jaguar I-PACE is not alerted. |
 | 3 | **Flooding** | Cold-start road: RAG retrieves 3 confirmed underpass floods (+0.15), so 0.65 gives a **verified alert: reroute**. The trace shows "Without retrieval the score would be 0.50 (caution advisory)". |
-| 4 | **False hazard report** | A radar-only debris report: similar past radar-only reports were false (−0.15), so 0.35 means **wait**. A look request goes to Titan. Titan reports clear, 0.05, resolved as a **false report** and learned. |
+| 4 | **False hazard report** | A radar-only debris report: similar past radar-only reports were false (−0.15), so 0.35 means **wait**. A look request goes to Volvo Truck. Volvo Truck reports clear, 0.05, resolved as a **false report** and learned. |
 | 5 | **Road cleared** | Confirmed debris on Dublin Blvd, then two independent clear reports resolve it. Ask "What has long-term memory learned from feedback?" |
 
 The other pages:

@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import type { Run } from "../types";
-import TraceTimeline, { Pipeline } from "../components/TraceTimeline";
+import type { AgentInfo, Run } from "../types";
+import TraceTimeline, { AgentTag, Pipeline } from "../components/TraceTimeline";
 import { SignalStrip } from "../components/Signals";
 import { Panel, StatusBadge, decisionStatus } from "../components/ui";
 
 /** Shows each processed report as a pass through the agent pipeline, step by step. */
-export default function AgentActivity({ runs, names }: { runs: Run[]; names: Record<string, string> }) {
+export default function AgentActivity({ runs, names, agents }: {
+  runs: Run[]; names: Record<string, string>; agents: AgentInfo[];
+}) {
   const [runId, setRunId] = useState<string | null>(null);
   const [stage, setStage] = useState<string | null>(null);
   const [details, setDetails] = useState(false);
@@ -15,11 +17,24 @@ export default function AgentActivity({ runs, names }: { runs: Run[]; names: Rec
   }, [runs, runId]);
   const current = runs.find((r) => r.run_id === runId);
 
+  const roster = (
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      {agents.map((a) => (
+        <div key={a.name} className="rounded-xl border border-hairline bg-surface p-3">
+          <AgentTag agent={a.name} />
+          <p className="mt-1.5 text-xs text-ink-2">{a.role}</p>
+        </div>
+      ))}
+    </div>
+  );
+
   if (!runs.length) {
-    return <Panel><p className="py-10 text-center text-sm text-muted">No agent runs yet. Start a scenario and press Next Step.</p></Panel>;
+    return <div className="space-y-4">{roster}<Panel><p className="py-10 text-center text-sm text-muted">No agent runs yet. Start a scenario and press Next Step.</p></Panel></div>;
   }
 
   return (
+    <div className="space-y-4">
+    {roster}
     <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
       <Panel title="Agent runs (one per report)">
         <ul className="space-y-1">
@@ -60,6 +75,7 @@ export default function AgentActivity({ runs, names }: { runs: Run[]; names: Rec
           </Panel>
         </div>
       )}
+    </div>
     </div>
   );
 }

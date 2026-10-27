@@ -19,6 +19,9 @@ export const AGENT_COLORS: Record<string, string> = {
   "Verification Agent": "#199e70",
   "Alert Agent": "#9085e9",
 };
+export const AGENT_NUMBER: Record<string, number> = {
+  "Hazard Analysis Agent": 1, "Verification Agent": 2, "Alert Agent": 3, "Research & Memory Agent": 4,
+};
 
 type StatusInfo = { color: string; label: string; Icon: typeof Info };
 

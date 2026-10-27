@@ -19,8 +19,13 @@ def _vehicle_from(question: str) -> dict | None:
     m = re.search(r"car-\d{3}", q)
     if m:
         return memory.get_vehicle(m.group(0).upper())
-    for v in memory.vehicles():  # callsigns such as "Comet"
-        if re.search(rf"\b{v['name'].lower()}\b", q):
+    vehicles = memory.vehicles()
+    for v in vehicles:  # full car name, e.g. "Ford Transit"
+        if v["name"].lower() in q:
+            return v
+    for v in vehicles:  # make or model alone, e.g. "the Ford" or "the Prius"
+        words = [w for w in v["name"].lower().split() if len(w) > 2 and w not in ("model", "truck")]
+        if any(re.search(rf"\b{re.escape(w)}\b", q) for w in words):
             return v
     return None
 
@@ -238,7 +243,8 @@ def ask(question: str) -> dict:
         from backend import research_agent
         try:
             result = research_agent.ask(question)
-            return {"question": question, "mode": f"anthropic agent ({result['model']})",
+            return {"question": question, "agent": "Research & Memory Agent",
+                    "mode": f"anthropic agent ({result['model']})",
                     "intent": "llm_tool_use", **result}
         except Exception as exc:  # fall back to the rule-based assistant
             fallback = rule_based_ask(question)
@@ -291,6 +297,7 @@ def rule_based_ask(question: str) -> dict:
             mock_answer += f"\n\n(LLM call failed: {type(exc).__name__}; showing the mock answer.)"
     return {
         "question": question,
+        "agent": "Research & Memory Agent",
         "answer": answer or mock_answer,
         "mode": mode if answer else "mock",
         "intent": a.intent,

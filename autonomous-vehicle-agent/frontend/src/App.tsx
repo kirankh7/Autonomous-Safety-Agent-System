@@ -106,7 +106,7 @@ export default function App() {
               {page === "dashboard" && <Dashboard state={state} runs={runs} go={setPage} />}
               {page === "map" && <MapPage state={state} />}
               {page === "simulation" && <Simulation state={state} scenarios={scenarios} run={run} busy={busy} />}
-              {page === "activity" && <AgentActivity runs={runs} names={Object.fromEntries(state.vehicles.map((v) => [v.id, v.name]))} />}
+              {page === "activity" && <AgentActivity runs={runs} agents={state.agents} names={Object.fromEntries(state.vehicles.map((v) => [v.id, v.name]))} />}
               {page === "research" && <Research messages={messages} setMessages={setMessages} mode={state.config.llm_provider} />}
             </>
           )}

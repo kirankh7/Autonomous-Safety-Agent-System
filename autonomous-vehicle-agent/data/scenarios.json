@@ -4,7 +4,7 @@
     {
       "id": "fog_truck",
       "title": "Stopped truck in fog",
-      "summary": "Orion spots a stopped truck in fog; Falcon confirms; Comet is warned; two clear reports resolve it.",
+      "summary": "Tesla Model 3 spots a stopped truck in fog; Toyota Prius confirms; Ford Transit is warned; two clear reports resolve it.",
       "weather": "fog",
       "visibility_m": 100,
       "setup": {
@@ -43,7 +43,7 @@
         {
           "type": "report",
           "t": 0,
-          "narration": "Orion reports a stopped truck 500 m ahead (fog, 100 m visibility)",
+          "narration": "Tesla Model 3 reports a stopped truck 500 m ahead (fog, 100 m visibility)",
           "report": {
             "vehicle_id": "CAR-001",
             "hazard": "stopped_truck",
@@ -61,7 +61,7 @@
         {
           "type": "report",
           "t": 40,
-          "narration": "Falcon confirms the stopped truck",
+          "narration": "Toyota Prius confirms the stopped truck",
           "report": {
             "vehicle_id": "CAR-002",
             "hazard": "stopped_truck",
@@ -78,8 +78,8 @@
         },
         {
           "type": "question",
-          "narration": "Ask: why was Comet alerted?",
-          "question": "Why was an alert generated for Comet?"
+          "narration": "Ask: why was Ford Transit alerted?",
+          "question": "Why was an alert generated for Ford Transit?"
         },
         {
           "type": "question",
@@ -89,7 +89,7 @@
         {
           "type": "report",
           "t": 600,
-          "narration": "Titan passes and reports the road clear",
+          "narration": "Volvo Truck passes and reports the road clear",
           "move": {
             "CAR-006": {
               "segment": "ROAD-01",
@@ -115,7 +115,7 @@
         {
           "type": "report",
           "t": 660,
-          "narration": "Echo reports clear: hazard resolved",
+          "narration": "Hyundai Ioniq 5 reports clear: hazard resolved",
           "move": {
             "CAR-007": {
               "segment": "ROAD-01",
@@ -170,7 +170,7 @@
         {
           "type": "report",
           "t": 0,
-          "narration": "Atlas reports a collision 300 m ahead",
+          "narration": "Mercedes Sprinter reports a collision 300 m ahead",
           "report": {
             "vehicle_id": "CAR-004",
             "hazard": "accident",
@@ -188,7 +188,7 @@
         {
           "type": "report",
           "t": 45,
-          "narration": "Orion confirms the accident",
+          "narration": "Tesla Model 3 confirms the accident",
           "move": {
             "CAR-001": {
               "segment": "ROAD-02",
@@ -215,7 +215,7 @@
         {
           "type": "report",
           "t": 80,
-          "narration": "Falcon confirms the accident",
+          "narration": "Toyota Prius confirms the accident",
           "move": {
             "CAR-002": {
               "segment": "ROAD-02",
@@ -269,7 +269,7 @@
         {
           "type": "report",
           "t": 0,
-          "narration": "Echo reports flooding under the rail bridge (night, heavy rain)",
+          "narration": "Hyundai Ioniq 5 reports flooding under the rail bridge (night, heavy rain)",
           "report": {
             "vehicle_id": "CAR-007",
             "hazard": "flooding",
@@ -292,7 +292,7 @@
         {
           "type": "report",
           "t": 90,
-          "narration": "Orion confirms the flooding",
+          "narration": "Tesla Model 3 confirms the flooding",
           "move": {
             "CAR-001": {
               "segment": "ROAD-05",
@@ -341,7 +341,7 @@
         {
           "type": "report",
           "t": 0,
-          "narration": "Pulse (radar only) reports possible debris",
+          "narration": "Nissan Leaf (radar only) reports possible debris",
           "report": {
             "vehicle_id": "CAR-008",
             "hazard": "debris",
@@ -358,7 +358,7 @@
         {
           "type": "report",
           "t": 120,
-          "narration": "Titan checks with its camera: road clear",
+          "narration": "Volvo Truck checks with its camera: road clear",
           "move": {
             "CAR-006": {
               "segment": "ROAD-04",
@@ -406,7 +406,7 @@
         {
           "type": "report",
           "t": 0,
-          "narration": "Titan reports a mattress in the left lane",
+          "narration": "Volvo Truck reports a mattress in the left lane",
           "report": {
             "vehicle_id": "CAR-006",
             "hazard": "debris",
@@ -424,7 +424,7 @@
         {
           "type": "report",
           "t": 50,
-          "narration": "Falcon confirms the debris",
+          "narration": "Toyota Prius confirms the debris",
           "move": {
             "CAR-002": {
               "segment": "ROAD-03",
@@ -450,7 +450,7 @@
         {
           "type": "report",
           "t": 840,
-          "narration": "Atlas reports the lane clear",
+          "narration": "Mercedes Sprinter reports the lane clear",
           "move": {
             "CAR-004": {
               "segment": "ROAD-03",
@@ -476,7 +476,7 @@
         {
           "type": "report",
           "t": 900,
-          "narration": "Nova reports clear: hazard resolved",
+          "narration": "Jaguar I-PACE reports clear: hazard resolved",
           "move": {
             "CAR-005": {
               "segment": "ROAD-03",

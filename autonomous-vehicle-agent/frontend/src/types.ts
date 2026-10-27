@@ -106,6 +106,7 @@ export interface Evidence {
 
 export interface ResearchAnswer {
   question: string;
+  agent?: string;
   answer: string;
   mode: string;
   intent: string;
@@ -165,6 +166,12 @@ export interface Incident {
   source: string;
 }
 
+export interface AgentInfo {
+  number: number;
+  name: string;
+  role: string;
+}
+
 export interface AppState {
   vehicles: Vehicle[];
   roads: Road[];
@@ -180,6 +187,7 @@ export interface AppState {
     incidents_learned: number;
   };
   incident_types: Record<string, number>;
+  agents: AgentInfo[];
   simulation: SimStatus;
   config: { llm_provider: string; embeddings: string; rules: Record<string, number> };
 }

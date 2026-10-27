@@ -15,7 +15,7 @@ from pydantic import BaseModel  # noqa: E402
 
 from backend import database, llm, memory, research, simulation  # noqa: E402
 from backend import tools as T  # noqa: E402
-from backend.agents import process_report  # noqa: E402
+from backend.agents import AGENTS, process_report  # noqa: E402
 from backend.rag import EMBEDDINGS, index as rag_index  # noqa: E402
 
 app = FastAPI(title="AV Intercommunication Safety Agent")
@@ -70,6 +70,7 @@ def get_state():
         },
         "incident_types": _count(incidents, "hazard_type"),
         "simulation": simulation.status(),
+        "agents": AGENTS,
         "config": {"llm_provider": llm.status(), "embeddings": EMBEDDINGS,
                    "rules": {"first_report": T.FIRST_REPORT, "confirmation": T.CONFIRMATION,
                              "road_clear": T.ROAD_CLEAR, "history_per_incident": T.HISTORY_PER_INCIDENT,

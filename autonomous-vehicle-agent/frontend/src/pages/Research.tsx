@@ -4,9 +4,10 @@ import type { ChatMessage } from "../types";
 import { api } from "../api";
 import AnswerView from "../components/AnswerView";
 import { Panel } from "../components/ui";
+import { AgentTag } from "../components/TraceTimeline";
 
 const SUGGESTIONS = [
-  "Why was an alert generated for Comet?",
+  "Why was an alert generated for Ford Transit?",
   "How many vehicles confirmed the hazard?",
   "Why did the confidence score increase?",
   "What similar incidents happened previously?",
@@ -41,7 +42,7 @@ export default function Research({ messages, setMessages, mode }: {
 
   return (
     <div className="grid h-[calc(100vh-9rem)] gap-4 lg:grid-cols-[1fr_300px]">
-      <Panel className="flex min-h-0 flex-col" title={<span className="flex items-center gap-2"><Bot size={16} /> Research Assistant</span>}
+      <Panel className="flex min-h-0 flex-col" title={<span className="flex items-center gap-3"><Bot size={16} /> Research Assistant <AgentTag agent="Research & Memory Agent" /></span>}
              action={<span className="rounded bg-page px-2 py-0.5 text-xs text-muted">LLM: {mode}</span>}>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
           {messages.length === 0 && (

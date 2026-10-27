@@ -27,7 +27,7 @@ function bounds(roads: Road[]): LatLngBoundsExpression {
   return [[Math.min(...lats), Math.min(...lngs)], [Math.max(...lats), Math.max(...lngs)]];
 }
 
-// Callsign labels stay visible only when zoomed in; otherwise they appear on hover (avoids overlap).
+// Car-name labels stay visible only when zoomed in; otherwise they appear on hover (avoids overlap).
 const LABEL_ZOOM = 15;
 
 function ZoomWatcher({ onZoom }: { onZoom: (z: number) => void }) {

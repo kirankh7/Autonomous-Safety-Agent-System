@@ -1,9 +1,9 @@
 {
-  "_note": "Eight synthetic autonomous vehicles. position_m is the distance along the road segment from its first point; direction is 'forward' or 'reverse' (see roads.json labels). Names are fleet callsigns.",
+  "_note": "Eight synthetic autonomous vehicles. position_m is the distance along the road segment from its first point; direction is 'forward' or 'reverse' (see roads.json labels). Names are familiar car models (synthetic data).",
   "vehicles": [
     {
       "id": "CAR-001",
-      "name": "Orion",
+      "name": "Tesla Model 3",
       "model": "Robotaxi sedan",
       "segment": "ROAD-01",
       "direction": "forward",
@@ -17,7 +17,7 @@
     },
     {
       "id": "CAR-002",
-      "name": "Falcon",
+      "name": "Toyota Prius",
       "model": "Robotaxi sedan",
       "segment": "ROAD-01",
       "direction": "forward",
@@ -31,7 +31,7 @@
     },
     {
       "id": "CAR-003",
-      "name": "Comet",
+      "name": "Ford Transit",
       "model": "Delivery van",
       "segment": "ROAD-03",
       "direction": "forward",
@@ -44,7 +44,7 @@
     },
     {
       "id": "CAR-004",
-      "name": "Atlas",
+      "name": "Mercedes Sprinter",
       "model": "Shuttle",
       "segment": "ROAD-02",
       "direction": "forward",
@@ -57,7 +57,7 @@
     },
     {
       "id": "CAR-005",
-      "name": "Nova",
+      "name": "Jaguar I-PACE",
       "model": "Robotaxi SUV",
       "segment": "ROAD-02",
       "direction": "reverse",
@@ -71,7 +71,7 @@
     },
     {
       "id": "CAR-006",
-      "name": "Titan",
+      "name": "Volvo Truck",
       "model": "Freight truck",
       "segment": "ROAD-04",
       "direction": "forward",
@@ -84,7 +84,7 @@
     },
     {
       "id": "CAR-007",
-      "name": "Echo",
+      "name": "Hyundai Ioniq 5",
       "model": "Robotaxi SUV",
       "segment": "ROAD-05",
       "direction": "forward",
@@ -98,8 +98,8 @@
     },
     {
       "id": "CAR-008",
-      "name": "Pulse",
-      "model": "Delivery van",
+      "name": "Nissan Leaf",
+      "model": "Compact hatchback",
       "segment": "ROAD-04",
       "direction": "reverse",
       "position_m": 2500,

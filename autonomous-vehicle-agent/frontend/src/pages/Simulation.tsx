@@ -4,7 +4,7 @@ import type { AppState, LogEntry, Scenario } from "../types";
 import { api } from "../api";
 import AnswerView from "../components/AnswerView";
 import FleetMap from "../components/FleetMap";
-import TraceTimeline from "../components/TraceTimeline";
+import TraceTimeline, { AgentLegend, AgentTag } from "../components/TraceTimeline";
 import { AlertRow, SignalChip, SignalStrip } from "../components/Signals";
 import { Button, ConfidenceMeter, Panel, StatusBadge, alertStatus, decisionStatus, fmtType } from "../components/ui";
 
@@ -67,7 +67,7 @@ export default function Simulation({ state, scenarios, run, busy }: Props) {
       </div>
 
       {sim.scenario && (
-        <div className="grid gap-4 xl:grid-cols-[320px_1fr_380px]">
+        <div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)_360px]">
           <Panel title="Scenario steps">
             <ol className="space-y-2">
               {sim.scenario.steps.map((s, i) => {
@@ -147,8 +147,11 @@ export default function Simulation({ state, scenarios, run, busy }: Props) {
                       )}
                     </div>
 
-                    <div className="mt-4 text-[11px] uppercase tracking-wide text-muted">Agent signals</div>
-                    <div className="mt-1"><SignalStrip steps={entry.trace ?? []} /></div>
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[11px] uppercase tracking-wide text-muted">Agent signals</span>
+                      <AgentLegend />
+                    </div>
+                    <div className="mt-2"><SignalStrip steps={entry.trace ?? []} /></div>
 
                     <div className="mt-4 text-[11px] uppercase tracking-wide text-muted">Alerts sent</div>
                     <div className="mt-1 grid gap-1.5">
@@ -164,7 +167,8 @@ export default function Simulation({ state, scenarios, run, busy }: Props) {
               );
             })()}
             {entry?.type === "question" && entry.answer && (
-              <Panel title={<span className="flex items-center gap-2"><MessageSquare size={14} /> Research Assistant</span>}>
+              <Panel title={<span className="flex items-center gap-2"><MessageSquare size={14} /> Research Assistant</span>}
+                     action={<AgentTag agent="Research & Memory Agent" />}>
                 <p className="mb-3 rounded-lg bg-surface-2 p-2 text-sm"><span className="text-muted">Q: </span>{entry.question}</p>
                 <AnswerView answer={entry.answer} />
               </Panel>
