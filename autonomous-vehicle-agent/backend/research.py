@@ -19,10 +19,9 @@ def _vehicle_from(question: str) -> dict | None:
     m = re.search(r"car-\d{3}", q)
     if m:
         return memory.get_vehicle(m.group(0).upper())
-    m = re.search(r"vehicle ([a-h])\b", q)
-    if m:
-        name = f"Vehicle {m.group(1).upper()}"
-        return next((v for v in memory.vehicles() if v["name"] == name), None)
+    for v in memory.vehicles():  # callsigns such as "Comet"
+        if re.search(rf"\b{v['name'].lower()}\b", q):
+            return v
     return None
 
 
@@ -73,12 +72,39 @@ def _cite_incident(a: Answer, i: dict) -> str:
         f"outcome {i['outcome'].replace('_', ' ')}. {i['description']} Lesson: {i['lesson']}"))
 
 
+def _name(vehicle_id: str) -> str:
+    v = memory.get_vehicle(vehicle_id)
+    return v["name"] if v else vehicle_id
+
+
+def _short_reason(e: dict) -> str:
+    """Compress a confidence-history reason into a few words."""
+    r, who = e["reason"], _name(e.get("report_vehicle", ""))
+    if r.startswith("First report"):
+        return f"first report · {who}"
+    if r.startswith("Independent confirmation"):
+        return f"confirmed · {who}"
+    if "reports the road is clear" in r:
+        return f"road clear · {who}"
+    if r.startswith("RAG history"):
+        return "RAG history (cold start)"
+    if r.startswith("Segment history"):
+        return "own segment history"
+    if "not independent" in r or "already" in r:
+        return f"duplicate, ignored · {who}"
+    return r.split(":")[0]
+
+
 def _confidence_story(a: Answer, h: dict) -> None:
-    for entry in h["confidence_history"]:
-        a.say(f"- t={entry['t']:.0f}s: {entry['delta']:+.2f} -> {entry['value']:.2f} ({entry['reason']})")
+    for e in h["confidence_history"]:
+        a.say(f"- {e['delta']:+.2f} → {e['value']:.2f} · {_short_reason(e)}")
 
 
-# ---------- Intent handlers ----------
+LEVEL = {"verified": "VERIFIED ALERT", "caution": "CAUTION ADVISORY",
+         "observation_request": "LOOK REQUEST", "all_clear": "ALL CLEAR"}
+
+
+# ---------- Intent handlers (one headline line + a few fact bullets) ----------
 
 def explain_alert(a: Answer, vehicle: dict | None, h: dict | None) -> None:
     a.tools.append("memory.alerts()")
@@ -86,46 +112,26 @@ def explain_alert(a: Answer, vehicle: dict | None, h: dict | None) -> None:
     if h:
         alerts = [x for x in alerts if x["hazard_id"] == h["id"]] or alerts
     if not alerts:
-        who = f"{vehicle['name']} ({vehicle['id']})" if vehicle else "any vehicle"
-        a.say(f"No alerts have been sent to {who} in the current scenario.")
+        a.say(f"No alerts sent to {vehicle['name'] if vehicle else 'any vehicle'} yet.")
         return
     priority = ["verified", "caution", "observation_request", "all_clear"]
     alert = min(alerts, key=lambda x: (priority.index(x["level"]), -x["t"]))
     h = memory.get_hazard(alert["hazard_id"])
-    v = memory.get_vehicle(alert["vehicle_id"])
-    reports = T.get_vehicle_reports(h["id"])
     a.tools.append(f"get_vehicle_reports({h['id']})")
-    level_text = {"verified": "a verified safety alert", "caution": "a caution advisory",
-                  "observation_request": "an observation request", "all_clear": "an all-clear notice"}
-    a.say(f"{v['name']} ({v['id']}) received {level_text[alert['level']]} {a.cite(alert['id'], 'alert', alert['message'])} "
-          f"for {_fmt_type(h['hazard_type'])} {_cite_hazard(a, h)}.")
+    a.say(f"{_name(alert['vehicle_id'])} got a {LEVEL[alert['level']]} "
+          f"{a.cite(alert['id'], 'alert', alert['message'])} for the {_fmt_type(h['hazard_type']).lower()} "
+          f"{_cite_hazard(a, h)}.")
     if alert["distance_m"]:
-        a.say(f"It was {alert['distance_m']:.0f} m behind the hazard on the same carriageway "
-              f"(about {alert['eta_s']:.0f} s away), so it was on an affected path.")
-    hazard_reports = [r for r in reports if r["hazard_type"] != "road_clear" and r["t"] <= alert["t"]]
-    if hazard_reports:
-        a.say("Evidence at the time: " + ", ".join(
-            f"{r['vehicle_id']} {_cite_report(a, r)}" for r in hazard_reports) + ".")
-    at_alert = [e for e in h["confidence_history"] if e["t"] <= alert["t"]]
-    if at_alert:
-        a.say("How the confidence score was built:")
-        for e in at_alert:
-            a.say(f"- {e['delta']:+.2f} -> {e['value']:.2f} ({e['reason']})")
-    thresholds = {"verified": f"at or above the {T.VERIFIED_AT} verified-alert threshold",
-                  "caution": f"between {T.CAUTION_AT} and {T.VERIFIED_AT} (caution band)",
-                  "observation_request": f"below {T.CAUTION_AT}, so the agent asked for observations",
-                  "all_clear": "after the hazard was resolved"}
-    a.say(f"The alert was sent at confidence {alert['confidence']:.2f}, {thresholds[alert['level']]}. "
-          f"Severity is {h['severity']} (visibility {h['visibility_m']:.0f} m). "
-          f"Recommended action: {h['recommended_action']}")
-    for inc in h["retrieved_incidents"]:
-        if inc["used_for"] == "confidence":
-            full = memory.get_incident(inc["id"])
-            if full:
-                _cite_incident(a, full)
-    if h["retrieval_delta"]:
-        ids = ", ".join(f"[{i['id']}]" for i in h["retrieved_incidents"] if i["used_for"] == "confidence")
-        a.say(f"Historical incidents {ids} adjusted confidence by {h['retrieval_delta']:+.2f}.")
+        a.say(f"- On its path: {alert['distance_m'] / 1000:.1f} km behind, same direction, ~{alert['eta_s']:.0f} s")
+    reports = [r for r in T.get_vehicle_reports(h["id"]) if r["hazard_type"] != "road_clear" and r["t"] <= alert["t"]]
+    if reports:
+        a.say("- Reported by: " + ", ".join(f"{_name(r['vehicle_id'])} {_cite_report(a, r)}" for r in reports))
+    a.say(f"- Confidence {alert['confidence']:.2f} (verified ≥ {T.VERIFIED_AT}, caution ≥ {T.CAUTION_AT})")
+    a.say(f"- Severity {h['severity']} · visibility {h['visibility_m']:.0f} m · {h['recommended_action']}")
+    used = [i for i in h["retrieved_incidents"] if i["used_for"] == "confidence"]
+    if h["retrieval_delta"] and used:
+        a.say(f"- History {h['retrieval_delta']:+.2f} from " + ", ".join(
+            _cite_incident(a, memory.get_incident(i["id"])) for i in used))
 
 
 def confirmations(a: Answer, h: dict) -> None:
@@ -133,77 +139,66 @@ def confirmations(a: Answer, h: dict) -> None:
     a.tools.append(f"get_vehicle_reports({h['id']})")
     hazard_reports = [r for r in reports if r["hazard_type"] != "road_clear"]
     clear = [r for r in reports if r["hazard_type"] == "road_clear"]
-    first = hazard_reports[0] if hazard_reports else None
-    confirms = hazard_reports[1:]
-    a.say(f"{_cite_hazard(a, h)} was first reported by {first['vehicle_id']} {_cite_report(a, first)}."
-          if first else f"{_cite_hazard(a, h)} has no hazard reports.")
-    if confirms:
-        a.say(f"{len(confirms)} independent vehicle(s) confirmed it: " + ", ".join(
-            f"{r['vehicle_id']} {_cite_report(a, r)}" for r in confirms) + ".")
-    else:
-        a.say("No other vehicle has confirmed it yet.")
-    if clear:
-        a.say(f"{len(clear)} vehicle(s) later reported the road clear: " + ", ".join(
-            f"{r['vehicle_id']} {_cite_report(a, r)}" for r in clear) + ".")
-    a.say(f"Current confidence: {h['confidence']:.2f} (status {h['status']}).")
+    a.say(f"{len(hazard_reports)} vehicle(s) reported {_cite_hazard(a, h)}; "
+          f"{max(len(hazard_reports) - 1, 0)} independent confirmation(s).")
+    for i, r in enumerate(hazard_reports):
+        a.say(f"- {_name(r['vehicle_id'])} {_cite_report(a, r)} · {'first report' if i == 0 else 'confirmed'}")
+    for r in clear:
+        a.say(f"- {_name(r['vehicle_id'])} {_cite_report(a, r)} · road clear")
+    a.say(f"- Now: confidence {h['confidence']:.2f} · {h['status']}")
 
 
 def confidence(a: Answer, h: dict) -> None:
-    a.say(f"Confidence history for {_cite_hazard(a, h)}:")
+    a.say(f"{_cite_hazard(a, h)} is at {h['confidence']:.2f} ({h['decision']}).")
     _confidence_story(a, h)
     for r in T.get_vehicle_reports(h["id"]):
         _cite_report(a, r)
-    used = [i for i in h["retrieved_incidents"] if i["used_for"] == "confidence"]
-    for inc in used:
-        full = memory.get_incident(inc["id"])
-        if full:
-            _cite_incident(a, full)
-    a.say(f"Rules: first report 0.50, independent confirmation +0.20, road-clear report -0.30, "
-          f"each similar past incident +/-0.05 (max +/-0.15). Current value {h['confidence']:.2f} "
-          f"-> {h['decision']}.")
+    for inc in h["retrieved_incidents"]:
+        if inc["used_for"] == "confidence" and memory.get_incident(inc["id"]):
+            _cite_incident(a, memory.get_incident(inc["id"]))
 
 
 def resolution(a: Answer, h: dict) -> None:
     if h["status"] == "active":
-        a.say(f"{_cite_hazard(a, h)} is still active at confidence {h['confidence']:.2f}. It resolves "
-              f"after {T.CLEAR_REPORTS_TO_RESOLVE} independent road-clear reports, or when a clear "
-              f"report pushes confidence below {T.RESOLVE_BELOW}.")
+        a.say(f"{_cite_hazard(a, h)} is still ACTIVE at {h['confidence']:.2f}.")
+        a.say(f"- Resolves after {T.CLEAR_REPORTS_TO_RESOLVE} independent clear reports, "
+              f"or a clear report that drops it below {T.RESOLVE_BELOW}")
         return
-    a.say(f"{_cite_hazard(a, h)} was {h['status']}: {h['resolution']}")
     clear = [r for r in T.get_vehicle_reports(h["id"]) if r["hazard_type"] == "road_clear"]
+    why = (f"{len(h['clear_vehicles'])} independent clear reports" if len(h["clear_vehicles"]) >= 2
+           else f"confidence fell below {T.RESOLVE_BELOW}")
+    a.say(f"{_cite_hazard(a, h)} was {h['status'].upper()}: {why}.")
     if clear:
-        a.say("Road-clear reports: " + ", ".join(f"{r['vehicle_id']} {_cite_report(a, r)}" for r in clear) + ".")
-    _confidence_story(a, h)
-    stored = [i for i in memory.incidents() if i["hazard_id"] == h["id"]]
-    for inc in stored:
-        a.say(f"The outcome was stored in long-term memory as {_cite_incident(a, inc)} "
-              f"(outcome: {inc['outcome'].replace('_', ' ')}), so future reports can retrieve it.")
+        a.say("- Clear reports: " + ", ".join(f"{_name(r['vehicle_id'])} {_cite_report(a, r)}" for r in clear))
+    hist = h["confidence_history"]
+    if hist:
+        a.say(f"- Confidence peaked at {h['max_confidence']:.2f}, ended at {hist[-1]['value']:.2f}")
+    for inc in [i for i in memory.incidents() if i["hazard_id"] == h["id"]]:
+        a.say(f"- Learned as {_cite_incident(a, inc)} · {inc['outcome'].replace('_', ' ')}")
     all_clear = [x for x in memory.alerts(hazard_id=h["id"]) if x["level"] == "all_clear"]
     if all_clear:
-        a.say("All-clear notices sent to: " + ", ".join(
-            f"{x['vehicle_id']} {a.cite(x['id'], 'alert', x['message'])}" for x in all_clear) + ".")
+        a.say("- All-clear sent to: " + ", ".join(
+            f"{_name(x['vehicle_id'])} {a.cite(x['id'], 'alert', x['message'])}" for x in all_clear))
 
 
 def similar(a: Answer, question: str, h: dict | None) -> None:
     if h:
         query = f"{_fmt_type(h['hazard_type'])} {h['weather'].replace('_', ' ')} {h['description']}"
         results = T.retrieve_similar_incidents(query, hazard_type=h["hazard_type"], k=5, use_mmr=True)
-        a.tools.append(f"retrieve_similar_incidents(hazard_type={h['hazard_type']}, k=5, MMR lambda=0.5)")
-        a.say(f"Incidents similar to {_cite_hazard(a, h)}, retrieved from long-term memory (MMR for variety):")
+        a.tools.append(f"retrieve_similar_incidents(hazard_type={h['hazard_type']}, k=5, MMR)")
+        a.say(f"{len(results)} similar past incident(s) for {_cite_hazard(a, h)}:")
     else:
         results = T.retrieve_similar_incidents(question, k=5, use_mmr=True)
-        a.tools.append("retrieve_similar_incidents(k=5, MMR lambda=0.5)")
-        a.say("Most relevant incidents in long-term memory:")
-    if not results:
-        a.say("No sufficiently similar incidents were found.")
+        a.tools.append("retrieve_similar_incidents(k=5, MMR)")
+        a.say(f"{len(results)} relevant past incident(s):")
     for inc in results:
-        a.say(f"- {_cite_incident(a, inc)} {inc['segment']}, {inc['weather'].replace('_', ' ')}, "
-              f"{inc['outcome'].replace('_', ' ')} (similarity {inc['score']:.2f}): {inc['lesson']}")
+        a.say(f"- {_cite_incident(a, inc)} {_fmt_type(inc['hazard_type']).lower()} · {inc['segment']} · "
+              f"{inc['outcome'].replace('_', ' ')} · sim {inc['score']:.2f}")
     if h:
         used = [i for i in h["retrieved_incidents"] if i["used_for"] == "confidence"]
         if used and h["retrieval_delta"]:
-            a.say(f"For scoring, the agent used {', '.join('[' + i['id'] + ']' for i in used)}, "
-                  f"which adjusted confidence by {h['retrieval_delta']:+.2f}.")
+            a.say(f"- Used for scoring: {', '.join('[' + i['id'] + ']' for i in used)} → "
+                  f"{h['retrieval_delta']:+.2f}")
             for inc in used:
                 full = memory.get_incident(inc["id"])
                 if full and full["id"] not in a.evidence:
@@ -214,29 +209,24 @@ def learned(a: Answer) -> None:
     incidents = memory.incidents()
     new = [i for i in incidents if i["source"] == "learned"]
     a.tools.append("memory.incidents()")
-    a.say(f"Long-term memory holds {len(incidents)} incidents: {len(incidents) - len(new)} historical "
-          f"and {len(new)} learned from feedback in this session.")
+    a.say(f"Long-term memory: {len(incidents)} incidents ({len(incidents) - len(new)} seed + {len(new)} learned).")
     for inc in new:
-        a.say(f"- {_cite_incident(a, inc)} from hazard {inc['hazard_id']}: {inc['lesson']}")
-    if new:
-        a.say("These are now in the RAG index, so similar future reports are scored with this outcome.")
+        a.say(f"- {_cite_incident(a, inc)} {_fmt_type(inc['hazard_type']).lower()} · {inc['segment']} · "
+              f"{inc['outcome'].replace('_', ' ')}")
 
 
 def active(a: Answer) -> None:
     hazards = memory.active_hazards()
-    if not hazards:
-        a.say("There are no active hazards right now.")
+    a.say(f"{len(hazards)} active hazard(s)." if hazards else "No active hazards.")
     for h in hazards:
-        a.say(f"- {_cite_hazard(a, h)}: {_fmt_type(h['hazard_type'])}, confidence {h['confidence']:.2f}, "
-              f"{h['decision']}")
+        a.say(f"- {_cite_hazard(a, h)} {_fmt_type(h['hazard_type']).lower()} · {h['confidence']:.2f} · {h['decision']}")
 
 
 def list_alerts(a: Answer) -> None:
     alerts = memory.alerts()
-    if not alerts:
-        a.say("No alerts have been sent yet.")
+    a.say(f"{len(alerts)} alert(s) sent." if alerts else "No alerts sent yet.")
     for x in alerts[-8:]:
-        a.say(f"- {a.cite(x['id'], 'alert', x['message'])} to {x['vehicle_id']} ({x['level'].replace('_', ' ')})")
+        a.say(f"- {a.cite(x['id'], 'alert', x['message'])} {LEVEL[x['level']]} → {_name(x['vehicle_id'])}")
 
 
 # ---------- Entry point ----------

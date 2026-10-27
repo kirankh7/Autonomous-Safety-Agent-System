@@ -43,9 +43,27 @@ class AgentState(TypedDict, total=False):
 
 
 def step(agent: str, stage: str, thought: str, action: str, tool: str, result: str,
-         confidence: float | None = None) -> dict:
+         confidence: float | None = None, signal: dict | None = None) -> dict:
     return {"agent": agent, "stage": stage, "thought": thought, "action": action,
-            "tool": tool, "result": result, "confidence": confidence}
+            "tool": tool, "result": result, "confidence": confidence, "signal": signal}
+
+
+def sig(label: str, detail: str = "", tone: str = "neutral") -> dict:
+    """The short, machine-readable signal an agent emits for each step (shown first in the UI).
+    tone: neutral | info | good | warning | serious | critical"""
+    return {"label": label, "detail": detail, "tone": tone}
+
+
+DECISION_SIGNAL = {"verified": ("VERIFIED", "critical"), "caution": ("CAUTION", "warning"),
+                   "wait": ("NEED EVIDENCE", "serious"), "resolved": ("RESOLVED", "good")}
+ALERT_SIGNAL = {"verified": ("ALERT", "critical"), "caution": ("CAUTION", "warning"),
+                "observation_request": ("LOOK REQUEST", "serious"), "all_clear": ("ALL CLEAR", "good")}
+SEVERITY_TONE = {"critical": "critical", "high": "serious", "medium": "warning", "low": "info"}
+
+
+def callsign(vehicle_id: str) -> str:
+    v = memory.get_vehicle(vehicle_id)
+    return v["name"] if v else vehicle_id
 
 
 def decision_for(confidence: float) -> str:
@@ -76,13 +94,17 @@ def hazard_analysis(state: AgentState) -> dict:
         "Classify the hazard type and convert 'distance ahead' into a road position",
         "classify_hazard()",
         f"hazard_type = {hazard_type}; position = {obs['position_m']} m along {segment} "
-        f"({direction.lower()} carriageway)")]
+        f"({direction.lower()} carriageway)",
+        signal=sig("CLEAR REPORT" if hazard_type == "road_clear" else "REPORT",
+                   f"{vehicle['name']} · {hazard_type.replace('_', ' ')} · {raw['distance']:.0f} m ahead",
+                   "good" if hazard_type == "road_clear" else "info"))]
 
     expired = memory.expire_stale(obs["t"])
     if expired:
         trace.append(step("Hazard Analysis Agent", "check_existing",
                           "Some hazards have had no reports for 15 minutes.",
-                          "Expire stale hazards", "expire_stale()", f"Expired: {', '.join(expired)}"))
+                          "Expire stale hazards", "expire_stale()", f"Expired: {', '.join(expired)}",
+                          signal=sig("EXPIRED", ", ".join(expired))))
 
     is_clear = hazard_type == "road_clear"
     matches = T.find_matching_hazards(segment, obs["direction"], position,
@@ -94,7 +116,8 @@ def hazard_analysis(state: AgentState) -> dict:
         f"find_matching_hazards({segment}, {obs['direction']}, {obs['position_m']}"
         f"{'' if is_clear else ', ' + hazard_type})",
         f"Match found: {matches[0]['id']} (confidence {matches[0]['confidence']:.2f})" if matches
-        else "No matching active hazard"))
+        else "No matching active hazard",
+        signal=sig("MATCH", matches[0]["id"]) if matches else sig("NO MATCH", "not tracked yet")))
 
     if matches:
         hazard = matches[0]
@@ -104,13 +127,16 @@ def hazard_analysis(state: AgentState) -> dict:
             f"This report updates {hazard['id']}. Which vehicles have already reported it?",
             "Load earlier reports for this hazard", f"get_vehicle_reports({hazard['id']})",
             f"{len(earlier)} earlier report(s) from "
-            f"{', '.join(sorted({r['vehicle_id'] for r in earlier})) or 'none'}"))
+            f"{', '.join(sorted({r['vehicle_id'] for r in earlier})) or 'none'}",
+            signal=sig("PRIOR REPORTS", f"{len(earlier)} · "
+                       + ", ".join(sorted({callsign(r['vehicle_id']) for r in earlier})))))
         return {"observation": obs, "hazard": hazard, "is_new": False, "trace": trace}
 
     if is_clear:
         trace.append(step("Hazard Analysis Agent", "check_existing",
                           "A road-clear report with no active hazard here needs no action.",
-                          "Record the report only", "-", "Nothing to clear"))
+                          "Record the report only", "-", "Nothing to clear",
+                          signal=sig("NOTHING TO CLEAR")))
         return {"observation": obs, "hazard": None, "is_new": False, "trace": trace}
 
     severity, action = T.severity_for(hazard_type, obs["visibility_m"])
@@ -127,7 +153,8 @@ def hazard_analysis(state: AgentState) -> dict:
         "This is a new hazard, so I will open a new event and look for historical context.",
         "Create hazard event", "create_event()",
         f"Created {hazard['id']}: {hazard_type.replace('_', ' ')}, severity {severity}"
-        f"{' (raised for low visibility)' if obs['visibility_m'] < T.LOW_VISIBILITY_M else ''}"))
+        f"{' (raised for low visibility)' if obs['visibility_m'] < T.LOW_VISIBILITY_M else ''}",
+        signal=sig("NEW HAZARD", f"{hazard['id']} · severity {severity}", SEVERITY_TONE[severity])))
     return {"observation": obs, "hazard": hazard, "is_new": True, "trace": trace}
 
 
@@ -149,7 +176,9 @@ def retrieve_history(state: AgentState) -> dict:
         "Semantic search of long-term memory (pre-filtered to the same hazard type, top 3)",
         f"retrieve_similar_incidents(hazard_type={obs['hazard_type']}, k=3)",
         ", ".join(f"{i['id']} ({i['outcome'].replace('_', ' ')}, sim {i['score']:.2f})" for i in retrieved)
-        or "No sufficiently similar incidents")]
+        or "No sufficiently similar incidents",
+        signal=sig("RAG", f"{len(retrieved)} similar · "
+                   + " ".join(f"{i['id']}{'✓' if i['outcome'] == 'confirmed' else '✗'}" for i in retrieved)))]
 
     own = memory.segment_history_count(obs["segment"])
     if own < T.COLD_START_INCIDENTS:
@@ -173,7 +202,10 @@ def retrieve_history(state: AgentState) -> dict:
         used = local
     trace.append(step("Research & Memory Agent", "retrieve", thought,
                       "Compute the bounded history adjustment (+/-0.05 per incident, cap +/-0.15)",
-                      "history_adjustment()", reason))
+                      "history_adjustment()", reason,
+                      signal=sig(f"HISTORY {delta:+.2f}",
+                                 "cold start · RAG" if source == "rag" else "own segment history",
+                                 "good" if delta > 0 else "serious" if delta < 0 else "neutral")))
 
     used_ids = {i["id"] for i in used}
     hazard["retrieved_incidents"] = (
@@ -200,10 +232,14 @@ def verify(state: AgentState) -> dict:
     if state["is_new"] and state.get("history_source") == "rag" and state.get("history_delta"):
         detail += (f". Without retrieval the score would be {T.FIRST_REPORT:.2f} "
                    f"({DECISION_TEXT[decision_for(T.FIRST_REPORT)]})")
+    before = state["hazard"]["confidence"]
+    label, tone = DECISION_SIGNAL[decision]
     trace = [step("Verification Agent", "verify",
                   f"How reliable is {hazard['id']} after the report from {obs['vehicle_id']}?",
                   "Apply the confidence rules and choose an action", "verify_hazard()",
-                  detail, hazard["confidence"])]
+                  detail, hazard["confidence"],
+                  signal=sig(label, f"start {hazard['confidence']:.2f}" if state["is_new"]
+                             else f"{before:.2f} → {hazard['confidence']:.2f}", tone))]
     return {"hazard": hazard, "decision": decision, "trace": trace}
 
 
@@ -222,7 +258,9 @@ def alert(state: AgentState) -> dict:
                           "The hazard is resolved. Which vehicles were warned earlier?",
                           "Find vehicles that received alerts for this hazard",
                           f"memory.alerts({hazard['id']})",
-                          ", ".join(t["vehicle"]["id"] for t in targets) or "None"))
+                          ", ".join(t["vehicle"]["id"] for t in targets) or "None",
+                          signal=sig("NOTIFY", ", ".join(callsign(t["vehicle"]["id"]) for t in targets)
+                                     or "nobody")))
     else:
         reporters = hazard["confirming_vehicles"] + hazard["clear_vehicles"] + [obs["vehicle_id"]]
         targets = T.find_approaching_vehicles(hazard, exclude=reporters)
@@ -238,7 +276,10 @@ def alert(state: AgentState) -> dict:
         trace.append(step("Alert Agent", "identify_vehicles",
                           f"Which vehicles are heading toward {hazard['id']} on the same carriageway?",
                           f"Find vehicles behind the hazard within {T.ALERT_RANGE_M} m, same direction",
-                          f"find_approaching_vehicles({hazard['id']})", result))
+                          f"find_approaching_vehicles({hazard['id']})", result,
+                          signal=sig("APPROACHING", " · ".join(
+                              f"{t['vehicle']['name']} {t['distance_m'] / 1000:.1f} km" for t in targets)
+                              or "none")))
 
     already = {(a["vehicle_id"], a["level"]) for a in previous}
     for target in targets:
@@ -252,7 +293,9 @@ def alert(state: AgentState) -> dict:
         "Send simulated alerts (skipping vehicles already sent this message type)",
         "send_mock_alert()",
         " | ".join(f"{a['id']} -> {a['vehicle_id']}: {a['message']}" for a in sent)
-        or "No new alerts needed", hazard["confidence"]))
+        or "No new alerts needed", hazard["confidence"],
+        signal=sig(f"{ALERT_SIGNAL[level][0]} →", ", ".join(callsign(a["vehicle_id"]) for a in sent),
+                   ALERT_SIGNAL[level][1]) if sent else sig("NO NEW ALERTS")))
     return {"alerts": sent, "trace": trace}
 
 
@@ -265,7 +308,8 @@ def update_memory(state: AgentState) -> dict:
         result = f"Stored {report['id']} (no hazard to update)"
         return {"stored_incident": None, "trace": [step(
             "Research & Memory Agent", "memory", "Keep a record of every observation.",
-            "Store the report in short-term memory", "update_hazard_memory()", result)]}
+            "Store the report in short-term memory", "update_hazard_memory()", result,
+            signal=sig("SAVED", report["id"]))]}
 
     hazard = {**hazard, "report_ids": hazard["report_ids"] + [report["id"]],
               "last_report_t": obs["t"]}
@@ -279,7 +323,9 @@ def update_memory(state: AgentState) -> dict:
     trace = [step("Research & Memory Agent", "memory",
                   "Remember what happened so later questions and future reports can use it.",
                   "Update short-term memory and, if resolved, long-term memory",
-                  "update_hazard_memory()", result, hazard["confidence"])]
+                  "update_hazard_memory()", result, hazard["confidence"],
+                  signal=sig("LEARNED", f"{incident['id']} · {incident['outcome'].replace('_', ' ')}", "good")
+                  if incident else sig("SAVED", f"{report['id']} → {hazard['id']}"))]
     return {"hazard": hazard, "stored_incident": incident, "trace": trace}
 
 

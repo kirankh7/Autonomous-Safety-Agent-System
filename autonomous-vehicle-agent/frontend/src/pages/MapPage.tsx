@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { AppState } from "../types";
 import FleetMap, { type Selection } from "../components/FleetMap";
+import { AlertRow } from "../components/Signals";
 import {
   ConfidenceMeter, Panel, STATUS, StatusBadge, VEHICLE_COLOR, alertStatus, decisionStatus, fmtType,
 } from "../components/ui";
@@ -17,7 +18,7 @@ export default function MapPage({ state }: { state: AppState }) {
       <div className="space-y-4 overflow-y-auto">
         <Panel title="Legend">
           <ul className="space-y-1.5 text-xs text-ink-2">
-            <li className="flex items-center gap-2"><Dot color={VEHICLE_COLOR} /> Vehicle (letter = Vehicle A-H)</li>
+            <li className="flex items-center gap-2"><Dot color={VEHICLE_COLOR} /> Vehicle (label = callsign)</li>
             <li className="flex items-center gap-2"><Ring color={STATUS.critical} /> Vehicle ring = last message received</li>
             {["verified", "caution", "wait", "resolved"].map((d) => {
               const s = decisionStatus(d, d === "resolved" ? "resolved" : "active");
@@ -31,7 +32,7 @@ export default function MapPage({ state }: { state: AppState }) {
         )}
 
         {vehicle && (
-          <Panel title={`${vehicle.name} (${vehicle.id})`}>
+          <Panel title={`${vehicle.name} · ${vehicle.model}`}>
             <dl className="grid grid-cols-2 gap-y-1 text-sm">
               <dt className="text-muted">Model</dt><dd>{vehicle.model}</dd>
               <dt className="text-muted">Road</dt><dd>{vehicle.road} ({vehicle.segment})</dd>
@@ -41,12 +42,11 @@ export default function MapPage({ state }: { state: AppState }) {
               <dt className="text-muted">Sensors</dt><dd>{vehicle.sensors.join(", ")}</dd>
             </dl>
             <h3 className="mt-3 mb-1 text-xs font-semibold text-ink-2">Messages received</h3>
-            {state.alerts.filter((a) => a.vehicle_id === vehicle.id).map((a) => (
-              <div key={a.id} className="mb-2 space-y-1 text-xs">
-                <StatusBadge info={alertStatus(a.level)} />
-                <div className="text-ink-2">{a.message}</div>
-              </div>
-            ))}
+            <div className="grid gap-1.5">
+              {state.alerts.filter((a) => a.vehicle_id === vehicle.id).map((a) => (
+                <AlertRow key={a.id} alert={a} name={a.hazard_id} />
+              ))}
+            </div>
             {!state.alerts.some((a) => a.vehicle_id === vehicle.id) && <p className="text-xs text-muted">None</p>}
           </Panel>
         )}
@@ -72,7 +72,7 @@ export default function MapPage({ state }: { state: AppState }) {
             <h3 className="mt-3 mb-1 text-xs font-semibold text-ink-2">Alert status</h3>
             <ul className="space-y-1 text-xs">
               {state.alerts.filter((a) => a.hazard_id === hazard.id).map((a) => (
-                <li key={a.id} className="flex items-center gap-2"><StatusBadge info={alertStatus(a.level)} /> {a.vehicle_id}</li>
+                <li key={a.id} className="flex items-center gap-2"><StatusBadge info={alertStatus(a.level)} /> {state.vehicles.find((v) => v.id === a.vehicle_id)?.name ?? a.vehicle_id}</li>
               ))}
             </ul>
             {hazard.resolution && <p className="mt-2 text-xs text-ink-2">Resolution: {hazard.resolution}</p>}

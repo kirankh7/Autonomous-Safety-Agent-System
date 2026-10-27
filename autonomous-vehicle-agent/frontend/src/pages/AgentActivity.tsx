@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import type { Run } from "../types";
 import TraceTimeline, { Pipeline } from "../components/TraceTimeline";
+import { SignalStrip } from "../components/Signals";
 import { Panel, StatusBadge, decisionStatus } from "../components/ui";
 
 /** Shows each processed report as a pass through the agent pipeline, step by step. */
-export default function AgentActivity({ runs }: { runs: Run[] }) {
+export default function AgentActivity({ runs, names }: { runs: Run[]; names: Record<string, string> }) {
   const [runId, setRunId] = useState<string | null>(null);
   const [stage, setStage] = useState<string | null>(null);
+  const [details, setDetails] = useState(false);
 
   useEffect(() => {
     if (!runs.find((r) => r.run_id === runId)) setRunId(runs.at(-1)?.run_id ?? null);
@@ -34,7 +36,7 @@ export default function AgentActivity({ runs }: { runs: Run[] }) {
                           r.run_id === runId ? "border-s1 bg-s1/10" : "border-hairline hover:border-axis"}`}>
                   <div className="flex items-center justify-between">
                     <span className="font-mono font-semibold">{r.run_id}</span>
-                    <span className="text-muted">{who}</span>
+                    <span className="text-ink-2">{who ? names[who] ?? who : ""}</span>
                   </div>
                   <div className="mt-1">{key ? <StatusBadge info={decisionStatus(key, key === "resolved" ? "resolved" : "active")} />
                     : <span className="text-muted">no hazard update</span>}</div>
@@ -48,14 +50,13 @@ export default function AgentActivity({ runs }: { runs: Run[] }) {
       {current && (
         <div className="space-y-4">
           <Panel title={`Workflow for ${current.run_id}`}>
-            <p className="mb-3 text-xs text-ink-2">
-              Each report passes through the LangGraph agents below. Click a stage to focus on it; dashed stages were skipped
-              (for example, history retrieval only runs when a new hazard is opened).
-            </p>
             <Pipeline steps={current.steps} selected={stage} onSelect={setStage} />
+            <div className="mt-3"><SignalStrip steps={current.steps} /></div>
           </Panel>
-          <Panel title="ReAct trace: reason, act with a tool, observe the result">
-            <TraceTimeline steps={current.steps} stageFilter={stage} />
+          <Panel title="ReAct trace"
+                 action={<button onClick={() => setDetails(!details)} className="text-xs text-s1 hover:underline">
+                   {details ? "Hide reasoning" : "Show reasoning for all steps"}</button>}>
+            <TraceTimeline steps={current.steps} stageFilter={stage} expandAll={details} />
           </Panel>
         </div>
       )}

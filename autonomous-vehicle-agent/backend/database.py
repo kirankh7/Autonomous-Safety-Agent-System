@@ -41,12 +41,12 @@ CREATE TABLE IF NOT EXISTS incidents (
 );
 CREATE TABLE IF NOT EXISTS trace (
     id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT, step INTEGER, agent TEXT, stage TEXT,
-    thought TEXT, action TEXT, tool TEXT, result TEXT, confidence REAL, t REAL
+    thought TEXT, action TEXT, tool TEXT, result TEXT, confidence REAL, t REAL, signal TEXT
 );
 """
 
 JSON_FIELDS = {"sensors", "report_ids", "confirming_vehicles", "clear_vehicles",
-               "confidence_history", "retrieved_incidents"}
+               "confidence_history", "retrieved_incidents", "signal"}
 
 
 def connect() -> sqlite3.Connection:
@@ -64,6 +64,10 @@ def db() -> sqlite3.Connection:
     if _conn is None:
         _conn = connect()
         _conn.executescript(SCHEMA)
+        # Older databases: add the trace.signal column if it is missing.
+        cols = [r[1] for r in _conn.execute("PRAGMA table_info(trace)")]
+        if "signal" not in cols:
+            _conn.execute("ALTER TABLE trace ADD COLUMN signal TEXT")
     return _conn
 
 

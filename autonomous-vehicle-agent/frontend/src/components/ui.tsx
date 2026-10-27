@@ -12,6 +12,14 @@ export const STATUS = {
 export const SERIES = ["#3987e5", "#d95926", "#199e70"]; // categorical slots 1-3
 export const VEHICLE_COLOR = "#3987e5";
 
+// Agent identity colours (categorical slots); the agent name is always shown next to the dot.
+export const AGENT_COLORS: Record<string, string> = {
+  "Hazard Analysis Agent": "#3987e5",
+  "Research & Memory Agent": "#d95926",
+  "Verification Agent": "#199e70",
+  "Alert Agent": "#9085e9",
+};
+
 type StatusInfo = { color: string; label: string; Icon: typeof Info };
 
 export function decisionStatus(decision?: string | null, status?: string): StatusInfo {

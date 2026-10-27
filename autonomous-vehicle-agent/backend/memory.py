@@ -6,6 +6,8 @@ It is cleared when a scenario is reset.
 Long-term memory: resolved incidents (20 historical seeds plus anything the agent learns
 from feedback). It persists across scenarios and is what the RAG index searches.
 """
+import json
+
 from backend import database as dbm
 
 # A hazard with no new reports for this long expires (simulated seconds).
@@ -79,10 +81,11 @@ def alerts(hazard_id: str | None = None, vehicle_id: str | None = None) -> list[
 
 
 def add_trace(entry: dict) -> None:
-    cols = ("run_id", "step", "agent", "stage", "thought", "action", "tool", "result", "confidence", "t")
+    cols = ("run_id", "step", "agent", "stage", "thought", "action", "tool", "result", "confidence",
+            "t", "signal")
     dbm.db().execute(
         f"INSERT INTO trace ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)})",
-        [entry.get(c) for c in cols],
+        [json.dumps(entry.get(c)) if c == "signal" else entry.get(c) for c in cols],
     )
     dbm.db().commit()
 

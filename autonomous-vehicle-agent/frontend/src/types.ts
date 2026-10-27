@@ -74,6 +74,12 @@ export interface Alert {
   t: number;
 }
 
+export interface Signal {
+  label: string;
+  detail: string;
+  tone: "neutral" | "info" | "good" | "warning" | "serious" | "critical";
+}
+
 export interface TraceStep {
   run_id?: string;
   step: number;
@@ -84,6 +90,7 @@ export interface TraceStep {
   tool: string;
   result: string;
   confidence: number | null;
+  signal?: Signal | null;
 }
 
 export interface Run {

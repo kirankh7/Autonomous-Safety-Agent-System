@@ -5,6 +5,7 @@ import { api } from "../api";
 import AnswerView from "../components/AnswerView";
 import FleetMap from "../components/FleetMap";
 import TraceTimeline from "../components/TraceTimeline";
+import { AlertRow, SignalChip, SignalStrip } from "../components/Signals";
 import { Button, ConfidenceMeter, Panel, StatusBadge, alertStatus, decisionStatus, fmtType } from "../components/ui";
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
 
 export default function Simulation({ state, scenarios, run, busy }: Props) {
   const sim = state.simulation;
+  const names = Object.fromEntries(state.vehicles.map((v) => [v.id, v.name]));
   const [viewIndex, setViewIndex] = useState<number | null>(null);
 
   // Always jump to the newest step after "Next Step".
@@ -36,7 +38,7 @@ export default function Simulation({ state, scenarios, run, busy }: Props) {
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface-2 text-xs">{i + 1}</span>
                 {s.title}
               </div>
-              <p className="mt-1 line-clamp-3 text-xs text-ink-2">{s.summary}</p>
+              <p className="mt-1 line-clamp-2 text-xs text-ink-2">{s.summary}</p>
               <div className="mt-2 flex items-center gap-1 text-[11px] text-muted">
                 <CloudFog size={12} /> {s.weather.replace("_", " ")}, {s.visibility_m} m visibility - {s.steps} steps
               </div>
@@ -109,35 +111,58 @@ export default function Simulation({ state, scenarios, run, busy }: Props) {
                 </div>
               </Panel>
             )}
-            {entry?.type === "report" && (
-              <>
-                <Panel title={`Step ${entry.index + 1}: ${entry.run_id}`}
-                       action={entry.decision && <StatusBadge info={decisionStatus(entry.decision)} />}>
-                  <p className="mb-3 text-sm text-ink-2">{entry.narration}</p>
-                  {entry.alerts && entry.alerts.length > 0 ? (
-                    <div className="space-y-2">
-                      {entry.alerts.map((a) => (
-                        <div key={a.id} className="rounded-lg border border-hairline bg-surface-2 p-2 text-xs">
-                          <div className="mb-1 flex items-center justify-between">
-                            <StatusBadge info={alertStatus(a.level)} />
-                            <span className="font-mono text-muted">{a.id} to {a.vehicle_id}</span>
+            {entry?.type === "report" && (() => {
+              const verify = entry.trace?.find((t) => t.stage === "verify");
+              const learned = entry.trace?.find((t) => t.signal?.label === "LEARNED");
+              const prev = sim.log.slice(0, entry.index).reverse()
+                .find((l) => l.type === "report" && l.hazard_id === entry.hazard_id)?.confidence;
+              const delta = entry.confidence != null && prev != null ? entry.confidence - prev : null;
+              return (
+                <>
+                  <Panel title={`Step ${entry.index + 1} · ${entry.run_id}`}
+                         action={<span className="text-xs text-muted">{entry.narration}</span>}>
+                    <div className="flex flex-wrap items-center gap-6">
+                      {entry.confidence != null && (
+                        <div>
+                          <div className="text-[11px] uppercase tracking-wide text-muted">Confidence</div>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-4xl font-semibold tabular">{entry.confidence.toFixed(2)}</span>
+                            {delta != null && delta !== 0 && (
+                              <span className="font-mono text-sm" style={{ color: delta > 0 ? "#0ca30c" : "#ec835a" }}>
+                                {delta > 0 ? "▲" : "▼"} {Math.abs(delta).toFixed(2)}
+                              </span>
+                            )}
                           </div>
-                          <div className="text-ink">{a.message}</div>
                         </div>
-                      ))}
+                      )}
+                      <div className="space-y-1">
+                        <div className="text-[11px] uppercase tracking-wide text-muted">Decision</div>
+                        {verify?.signal ? <SignalChip signal={verify.signal} big /> : <span className="text-sm text-ink-2">no hazard</span>}
+                      </div>
+                      {learned?.signal && (
+                        <div className="space-y-1">
+                          <div className="text-[11px] uppercase tracking-wide text-muted">Memory</div>
+                          <SignalChip signal={learned.signal} big />
+                        </div>
+                      )}
                     </div>
-                  ) : <p className="text-xs text-muted">No new alerts at this step.</p>}
-                  {entry.stored_incident && (
-                    <p className="mt-2 text-xs text-good">
-                      Stored in long-term memory as {entry.stored_incident.id} (outcome: {entry.stored_incident.outcome.replace("_", " ")}).
-                    </p>
-                  )}
-                </Panel>
-                <Panel title="Agent trace for this step">
-                  <TraceTimeline steps={entry.trace ?? []} />
-                </Panel>
-              </>
-            )}
+
+                    <div className="mt-4 text-[11px] uppercase tracking-wide text-muted">Agent signals</div>
+                    <div className="mt-1"><SignalStrip steps={entry.trace ?? []} /></div>
+
+                    <div className="mt-4 text-[11px] uppercase tracking-wide text-muted">Alerts sent</div>
+                    <div className="mt-1 grid gap-1.5">
+                      {entry.alerts && entry.alerts.length > 0
+                        ? entry.alerts.map((a) => <AlertRow key={a.id} alert={a} name={names[a.vehicle_id] ?? a.vehicle_id} />)
+                        : <span className="text-xs text-muted">None at this step</span>}
+                    </div>
+                  </Panel>
+                  <Panel title="Agent trace" action={<span className="text-xs text-muted">click a step for reasoning</span>}>
+                    <TraceTimeline steps={entry.trace ?? []} />
+                  </Panel>
+                </>
+              );
+            })()}
             {entry?.type === "question" && entry.answer && (
               <Panel title={<span className="flex items-center gap-2"><MessageSquare size={14} /> Research Assistant</span>}>
                 <p className="mb-3 rounded-lg bg-surface-2 p-2 text-sm"><span className="text-muted">Q: </span>{entry.question}</p>

@@ -31,9 +31,13 @@ Background rules you can explain: first report 0.50; independent confirmation +0
 -0.30; similar past incidents +/-0.05 each (cap +/-0.15, only on segments with fewer than 3 past \
 incidents, otherwise exact segment history); >=0.60 verified alert, 0.40-0.60 caution advisory, \
 <0.40 wait and request observations; two independent clear reports resolve a hazard. \
-Vehicle names map to IDs: Vehicle A = CAR-001 ... Vehicle H = CAR-008.
+Vehicles have callsigns: Orion = CAR-001, Falcon = CAR-002, Comet = CAR-003, Atlas = CAR-004, \
+Nova = CAR-005, Titan = CAR-006, Echo = CAR-007, Pulse = CAR-008. Refer to vehicles by callsign.
 
-Keep answers concise (under 180 words) and use short bullet points for step-by-step explanations."""
+Format the answer as signals, not prose:
+- Line 1: the direct answer in under 15 words, with the key ID.
+- Then at most 3 bullets, each under 12 words, in the style "Orion report [RPT-001] -> 0.50 caution".
+- No headings, bold text, background or restating the question. Under 60 words in total."""
 
 TOOLS = [
     {"name": "list_hazards",

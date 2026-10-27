@@ -1,4 +1,5 @@
-import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, Tooltip } from "react-leaflet";
+import { useState } from "react";
+import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, Tooltip, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import type { LatLngBoundsExpression } from "leaflet";
 import type { Alert, Hazard, Road, Vehicle } from "../types";
@@ -26,16 +27,26 @@ function bounds(roads: Road[]): LatLngBoundsExpression {
   return [[Math.min(...lats), Math.min(...lngs)], [Math.max(...lats), Math.max(...lngs)]];
 }
 
+// Callsign labels stay visible only when zoomed in; otherwise they appear on hover (avoids overlap).
+const LABEL_ZOOM = 15;
+
+function ZoomWatcher({ onZoom }: { onZoom: (z: number) => void }) {
+  const map = useMapEvents({ zoomend: () => onZoom(map.getZoom()) });
+  return null;
+}
+
 export default function FleetMap({ roads, vehicles, hazards, alerts, onSelect, height = "100%", showResolved = true }: Props) {
   // The latest alert per vehicle decides its ring colour.
   const latestAlert = new Map<string, Alert>();
   alerts.forEach((a) => latestAlert.set(a.vehicle_id, a));
   const shownHazards = hazards.filter((h) => showResolved || h.status === "active");
+  const [zoom, setZoom] = useState(13);
 
   return (
     <div style={{ height }} className="overflow-hidden rounded-lg border border-hairline">
       <MapContainer bounds={bounds(roads)} boundsOptions={{ padding: [24, 24] }}
                     style={{ height: "100%", width: "100%" }} scrollWheelZoom>
+        <ZoomWatcher onZoom={setZoom} />
         <TileLayer
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -56,11 +67,9 @@ export default function FleetMap({ roads, vehicles, hazards, alerts, onSelect, h
               <Tooltip direction="top" offset={[0, -12]}>{h.id}: {fmtType(h.hazard_type)} ({st.label})</Tooltip>
               <Popup>
                 <div className="space-y-1 text-xs">
-                  <div className="font-semibold">{h.id}: {fmtType(h.hazard_type)}</div>
-                  <div>{h.road} {h.direction_label.toLowerCase()}</div>
-                  <div>Status: {st.label} - confidence {h.confidence.toFixed(2)}</div>
-                  <div>Severity: {h.severity}; reports: {h.report_ids.join(", ")}</div>
-                  <div>Alerts: {alerts.filter((a) => a.hazard_id === h.id).length}</div>
+                  <div className="font-semibold">{fmtType(h.hazard_type)} · {h.id}</div>
+                  <div>{st.label} · {h.confidence.toFixed(2)} · {h.severity}</div>
+                  <div>{h.report_ids.length} reports · {alerts.filter((a) => a.hazard_id === h.id).length} alerts</div>
                 </div>
               </Popup>
             </CircleMarker>
@@ -74,15 +83,15 @@ export default function FleetMap({ roads, vehicles, hazards, alerts, onSelect, h
             <CircleMarker key={v.id} center={[v.lat, v.lng]} radius={7}
                           pathOptions={{ color: ring, weight: alert ? 3 : 2, fillColor: VEHICLE_COLOR, fillOpacity: 1 }}
                           eventHandlers={{ click: () => onSelect?.({ kind: "vehicle", id: v.id }) }}>
-              <Tooltip permanent direction="right" offset={[8, 0]} className="vehicle-label">
-                {v.name.replace("Vehicle ", "")}
+              <Tooltip key={zoom >= LABEL_ZOOM ? "on" : "off"} permanent={zoom >= LABEL_ZOOM}
+                       direction="right" offset={[8, 0]} className="vehicle-label">
+                {v.name}
               </Tooltip>
               <Popup>
                 <div className="space-y-1 text-xs">
-                  <div className="font-semibold">{v.name} ({v.id})</div>
-                  <div>{v.model} - {v.road} {v.direction_label.toLowerCase()}</div>
-                  <div>{Math.round(v.speed_kmh)} km/h - sensors: {v.sensors.join(", ")}</div>
-                  {alert && <div>Last message: {alertStatus(alert.level).label} ({alert.id})</div>}
+                  <div className="font-semibold">{v.name} · {v.model}</div>
+                  <div>{v.road} {v.direction_label.toLowerCase()} · {Math.round(v.speed_kmh)} km/h</div>
+                  {alert && <div>Last: {alertStatus(alert.level).label}</div>}
                 </div>
               </Popup>
             </CircleMarker>

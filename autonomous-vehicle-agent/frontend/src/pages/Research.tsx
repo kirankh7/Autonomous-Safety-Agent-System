@@ -6,7 +6,7 @@ import AnswerView from "../components/AnswerView";
 import { Panel } from "../components/ui";
 
 const SUGGESTIONS = [
-  "Why was an alert generated for Vehicle C?",
+  "Why was an alert generated for Comet?",
   "How many vehicles confirmed the hazard?",
   "Why did the confidence score increase?",
   "What similar incidents happened previously?",

@@ -4,115 +4,512 @@
     {
       "id": "fog_truck",
       "title": "Stopped truck in fog",
-      "summary": "Vehicle A sees a stopped truck 500 m ahead in dense fog. Vehicle B confirms, Vehicle C is warned, and two later 'road clear' reports resolve the hazard.",
+      "summary": "Orion spots a stopped truck in fog; Falcon confirms; Comet is warned; two clear reports resolve it.",
       "weather": "fog",
       "visibility_m": 100,
       "setup": {
-        "CAR-001": {"segment": "ROAD-01", "direction": "forward", "position_m": 3000, "speed_kmh": 85},
-        "CAR-002": {"segment": "ROAD-01", "direction": "forward", "position_m": 3050, "speed_kmh": 80},
-        "CAR-003": {"segment": "ROAD-01", "direction": "forward", "position_m": 2400, "speed_kmh": 90},
-        "CAR-004": {"segment": "ROAD-01", "direction": "reverse", "position_m": 4300, "speed_kmh": 95},
-        "CAR-005": {"segment": "ROAD-01", "direction": "forward", "position_m": 4100, "speed_kmh": 90}
+        "CAR-001": {
+          "segment": "ROAD-01",
+          "direction": "forward",
+          "position_m": 3000,
+          "speed_kmh": 85
+        },
+        "CAR-002": {
+          "segment": "ROAD-01",
+          "direction": "forward",
+          "position_m": 3050,
+          "speed_kmh": 80
+        },
+        "CAR-003": {
+          "segment": "ROAD-01",
+          "direction": "forward",
+          "position_m": 2400,
+          "speed_kmh": 90
+        },
+        "CAR-004": {
+          "segment": "ROAD-01",
+          "direction": "reverse",
+          "position_m": 4300,
+          "speed_kmh": 95
+        },
+        "CAR-005": {
+          "segment": "ROAD-01",
+          "direction": "forward",
+          "position_m": 4100,
+          "speed_kmh": 90
+        }
       },
       "steps": [
-        {"type": "report", "t": 0, "narration": "Vehicle A detects a stopped truck about 500 m ahead in dense fog and sends a hazard report.",
-         "report": {"vehicle_id": "CAR-001", "hazard": "stopped_truck", "road_segment": "ROAD-01", "distance": 500, "weather": "fog", "visibility": 100, "sensors": ["camera", "lidar"], "description": "Stopped truck blocking the right lane, hazard lights on, barely visible in fog."}},
-        {"type": "report", "t": 40, "narration": "Vehicle B, in the next lane, independently confirms the same stopped truck.",
-         "report": {"vehicle_id": "CAR-002", "hazard": "stopped_truck", "road_segment": "ROAD-01", "distance": 450, "weather": "fog", "visibility": 100, "sensors": ["camera", "radar"], "description": "Large truck stationary in the right lane."}},
-        {"type": "question", "narration": "Ask the Research Assistant to explain the alert.", "question": "Why was an alert generated for Vehicle C?"},
-        {"type": "question", "narration": "Ask how much evidence supports the hazard.", "question": "How many vehicles confirmed the hazard?"},
-        {"type": "report", "t": 600, "narration": "Ten minutes later, Vehicle F passes the location and reports the road is clear.",
-         "move": {"CAR-006": {"segment": "ROAD-01", "direction": "forward", "position_m": 3420, "speed_kmh": 80}},
-         "report": {"vehicle_id": "CAR-006", "hazard": "road_clear", "road_segment": "ROAD-01", "distance": 80, "weather": "fog", "visibility": 300, "sensors": ["camera", "radar"], "description": "Right lane open, no truck visible."}},
-        {"type": "report", "t": 660, "narration": "Vehicle G independently reports the road is clear, which resolves the hazard.",
-         "move": {"CAR-007": {"segment": "ROAD-01", "direction": "forward", "position_m": 3460, "speed_kmh": 85}},
-         "report": {"vehicle_id": "CAR-007", "hazard": "road_clear", "road_segment": "ROAD-01", "distance": 40, "weather": "fog", "visibility": 400, "sensors": ["camera", "lidar", "radar"], "description": "All lanes clear."}},
-        {"type": "question", "narration": "Ask why the hazard was resolved and what was stored in long-term memory.", "question": "Why was the hazard resolved?"}
+        {
+          "type": "report",
+          "t": 0,
+          "narration": "Orion reports a stopped truck 500 m ahead (fog, 100 m visibility)",
+          "report": {
+            "vehicle_id": "CAR-001",
+            "hazard": "stopped_truck",
+            "road_segment": "ROAD-01",
+            "distance": 500,
+            "weather": "fog",
+            "visibility": 100,
+            "sensors": [
+              "camera",
+              "lidar"
+            ],
+            "description": "Stopped truck blocking the right lane, hazard lights on, barely visible in fog."
+          }
+        },
+        {
+          "type": "report",
+          "t": 40,
+          "narration": "Falcon confirms the stopped truck",
+          "report": {
+            "vehicle_id": "CAR-002",
+            "hazard": "stopped_truck",
+            "road_segment": "ROAD-01",
+            "distance": 450,
+            "weather": "fog",
+            "visibility": 100,
+            "sensors": [
+              "camera",
+              "radar"
+            ],
+            "description": "Large truck stationary in the right lane."
+          }
+        },
+        {
+          "type": "question",
+          "narration": "Ask: why was Comet alerted?",
+          "question": "Why was an alert generated for Comet?"
+        },
+        {
+          "type": "question",
+          "narration": "Ask: how many vehicles confirmed it?",
+          "question": "How many vehicles confirmed the hazard?"
+        },
+        {
+          "type": "report",
+          "t": 600,
+          "narration": "Titan passes and reports the road clear",
+          "move": {
+            "CAR-006": {
+              "segment": "ROAD-01",
+              "direction": "forward",
+              "position_m": 3420,
+              "speed_kmh": 80
+            }
+          },
+          "report": {
+            "vehicle_id": "CAR-006",
+            "hazard": "road_clear",
+            "road_segment": "ROAD-01",
+            "distance": 80,
+            "weather": "fog",
+            "visibility": 300,
+            "sensors": [
+              "camera",
+              "radar"
+            ],
+            "description": "Right lane open, no truck visible."
+          }
+        },
+        {
+          "type": "report",
+          "t": 660,
+          "narration": "Echo reports clear: hazard resolved",
+          "move": {
+            "CAR-007": {
+              "segment": "ROAD-01",
+              "direction": "forward",
+              "position_m": 3460,
+              "speed_kmh": 85
+            }
+          },
+          "report": {
+            "vehicle_id": "CAR-007",
+            "hazard": "road_clear",
+            "road_segment": "ROAD-01",
+            "distance": 40,
+            "weather": "fog",
+            "visibility": 400,
+            "sensors": [
+              "camera",
+              "lidar",
+              "radar"
+            ],
+            "description": "All lanes clear."
+          }
+        },
+        {
+          "type": "question",
+          "narration": "Ask: why was the hazard resolved?",
+          "question": "Why was the hazard resolved?"
+        }
       ]
     },
     {
       "id": "accident",
       "title": "Road accident",
-      "summary": "A collision on I-680 southbound is confirmed by two more vehicles. Only southbound traffic behind the crash is alerted; northbound Vehicle E is not.",
+      "summary": "Collision on I-680 southbound, confirmed twice; only traffic behind it is alerted.",
       "weather": "clear",
       "visibility_m": 9000,
       "setup": {
-        "CAR-004": {"segment": "ROAD-02", "direction": "forward", "position_m": 2000, "speed_kmh": 90},
-        "CAR-003": {"segment": "ROAD-02", "direction": "forward", "position_m": 700, "speed_kmh": 95}
+        "CAR-004": {
+          "segment": "ROAD-02",
+          "direction": "forward",
+          "position_m": 2000,
+          "speed_kmh": 90
+        },
+        "CAR-003": {
+          "segment": "ROAD-02",
+          "direction": "forward",
+          "position_m": 700,
+          "speed_kmh": 95
+        }
       },
       "steps": [
-        {"type": "report", "t": 0, "narration": "Vehicle D reports a collision about 300 m ahead on I-680 southbound.",
-         "report": {"vehicle_id": "CAR-004", "hazard": "accident", "road_segment": "ROAD-02", "distance": 300, "weather": "clear", "visibility": 9000, "sensors": ["camera", "lidar"], "description": "Two-car collision blocking the left lane, debris on the road."}},
-        {"type": "report", "t": 45, "narration": "Vehicle A arrives and confirms the accident.",
-         "move": {"CAR-001": {"segment": "ROAD-02", "direction": "forward", "position_m": 2100, "speed_kmh": 40}},
-         "report": {"vehicle_id": "CAR-001", "hazard": "accident", "road_segment": "ROAD-02", "distance": 200, "weather": "clear", "visibility": 9000, "sensors": ["camera", "lidar", "radar"], "description": "Collision scene, left lane blocked."}},
-        {"type": "report", "t": 80, "narration": "Vehicle B also confirms the accident, so confidence rises again.",
-         "move": {"CAR-002": {"segment": "ROAD-02", "direction": "forward", "position_m": 2180, "speed_kmh": 30}},
-         "report": {"vehicle_id": "CAR-002", "hazard": "accident", "road_segment": "ROAD-02", "distance": 120, "weather": "clear", "visibility": 9000, "sensors": ["camera", "radar"], "description": "Crashed vehicles in the left lane."}},
-        {"type": "question", "narration": "Ask why the confidence score increased.", "question": "Why did the confidence score increase?"}
+        {
+          "type": "report",
+          "t": 0,
+          "narration": "Atlas reports a collision 300 m ahead",
+          "report": {
+            "vehicle_id": "CAR-004",
+            "hazard": "accident",
+            "road_segment": "ROAD-02",
+            "distance": 300,
+            "weather": "clear",
+            "visibility": 9000,
+            "sensors": [
+              "camera",
+              "lidar"
+            ],
+            "description": "Two-car collision blocking the left lane, debris on the road."
+          }
+        },
+        {
+          "type": "report",
+          "t": 45,
+          "narration": "Orion confirms the accident",
+          "move": {
+            "CAR-001": {
+              "segment": "ROAD-02",
+              "direction": "forward",
+              "position_m": 2100,
+              "speed_kmh": 40
+            }
+          },
+          "report": {
+            "vehicle_id": "CAR-001",
+            "hazard": "accident",
+            "road_segment": "ROAD-02",
+            "distance": 200,
+            "weather": "clear",
+            "visibility": 9000,
+            "sensors": [
+              "camera",
+              "lidar",
+              "radar"
+            ],
+            "description": "Collision scene, left lane blocked."
+          }
+        },
+        {
+          "type": "report",
+          "t": 80,
+          "narration": "Falcon confirms the accident",
+          "move": {
+            "CAR-002": {
+              "segment": "ROAD-02",
+              "direction": "forward",
+              "position_m": 2180,
+              "speed_kmh": 30
+            }
+          },
+          "report": {
+            "vehicle_id": "CAR-002",
+            "hazard": "accident",
+            "road_segment": "ROAD-02",
+            "distance": 120,
+            "weather": "clear",
+            "visibility": 9000,
+            "sensors": [
+              "camera",
+              "radar"
+            ],
+            "description": "Crashed vehicles in the left lane."
+          }
+        },
+        {
+          "type": "question",
+          "narration": "Ask: why did confidence increase?",
+          "question": "Why did the confidence score increase?"
+        }
       ]
     },
     {
       "id": "flooding",
       "title": "Flooding",
-      "summary": "A single flooding report on a road with no history (cold start). Retrieved similar incidents raise confidence from 0.50 to 0.65, so the agent issues a verified alert instead of a caution advisory.",
+      "summary": "Cold-start road: retrieved past floods lift one report from caution to a verified alert.",
       "weather": "heavy_rain",
       "visibility_m": 150,
       "setup": {
-        "CAR-007": {"segment": "ROAD-05", "direction": "forward", "position_m": 1800, "speed_kmh": 40},
-        "CAR-003": {"segment": "ROAD-05", "direction": "forward", "position_m": 1000, "speed_kmh": 60}
+        "CAR-007": {
+          "segment": "ROAD-05",
+          "direction": "forward",
+          "position_m": 1800,
+          "speed_kmh": 40
+        },
+        "CAR-003": {
+          "segment": "ROAD-05",
+          "direction": "forward",
+          "position_m": 1000,
+          "speed_kmh": 60
+        }
       },
       "steps": [
-        {"type": "report", "t": 0, "narration": "At night in heavy rain, Vehicle G reports water across both lanes under the rail bridge on Tassajara Rd, a segment with almost no recorded history.",
-         "report": {"vehicle_id": "CAR-007", "hazard": "flooding", "road_segment": "ROAD-05", "distance": 250, "weather": "heavy_rain", "visibility": 150, "sensors": ["camera", "lidar"], "description": "Water across both lanes under the rail bridge underpass, heavy rain at night, depth unclear."}},
-        {"type": "question", "narration": "Ask the Research Assistant which past incidents influenced the decision.", "question": "What similar incidents happened previously?"},
-        {"type": "report", "t": 90, "narration": "Vehicle A reaches the underpass and confirms the flooding.",
-         "move": {"CAR-001": {"segment": "ROAD-05", "direction": "forward", "position_m": 1950, "speed_kmh": 20}},
-         "report": {"vehicle_id": "CAR-001", "hazard": "flooding", "road_segment": "ROAD-05", "distance": 100, "weather": "heavy_rain", "visibility": 150, "sensors": ["camera", "lidar", "radar"], "description": "Standing water across the road under the bridge."}},
-        {"type": "question", "narration": "Ask why the confidence score increased.", "question": "Why did the confidence score increase?"}
+        {
+          "type": "report",
+          "t": 0,
+          "narration": "Echo reports flooding under the rail bridge (night, heavy rain)",
+          "report": {
+            "vehicle_id": "CAR-007",
+            "hazard": "flooding",
+            "road_segment": "ROAD-05",
+            "distance": 250,
+            "weather": "heavy_rain",
+            "visibility": 150,
+            "sensors": [
+              "camera",
+              "lidar"
+            ],
+            "description": "Water across both lanes under the rail bridge underpass, heavy rain at night, depth unclear."
+          }
+        },
+        {
+          "type": "question",
+          "narration": "Ask: which past incidents were used?",
+          "question": "What similar incidents happened previously?"
+        },
+        {
+          "type": "report",
+          "t": 90,
+          "narration": "Orion confirms the flooding",
+          "move": {
+            "CAR-001": {
+              "segment": "ROAD-05",
+              "direction": "forward",
+              "position_m": 1950,
+              "speed_kmh": 20
+            }
+          },
+          "report": {
+            "vehicle_id": "CAR-001",
+            "hazard": "flooding",
+            "road_segment": "ROAD-05",
+            "distance": 100,
+            "weather": "heavy_rain",
+            "visibility": 150,
+            "sensors": [
+              "camera",
+              "lidar",
+              "radar"
+            ],
+            "description": "Standing water across the road under the bridge."
+          }
+        },
+        {
+          "type": "question",
+          "narration": "Ask: why did confidence increase?",
+          "question": "Why did the confidence score increase?"
+        }
       ]
     },
     {
       "id": "false_report",
       "title": "False hazard report",
-      "summary": "A radar-only debris report on a road with little history. Similar past radar-only reports were false, so confidence drops to 0.35 and the agent asks an approaching vehicle to look instead of alerting.",
+      "summary": "Radar-only debris report; past false alarms drop it below 0.40, so the agent asks for a look instead of alerting.",
       "weather": "clear",
       "visibility_m": 9000,
       "setup": {
-        "CAR-008": {"segment": "ROAD-04", "direction": "forward", "position_m": 1200, "speed_kmh": 50}
+        "CAR-008": {
+          "segment": "ROAD-04",
+          "direction": "forward",
+          "position_m": 1200,
+          "speed_kmh": 50
+        }
       },
       "steps": [
-        {"type": "report", "t": 0, "narration": "Vehicle H, which has radar only, reports possible debris 200 m ahead on Dougherty Rd.",
-         "report": {"vehicle_id": "CAR-008", "hazard": "debris", "road_segment": "ROAD-04", "distance": 200, "weather": "clear", "visibility": 9000, "sensors": ["radar"], "description": "Possible debris object in the right lane detected by radar only, no camera confirmation."}},
-        {"type": "report", "t": 120, "narration": "Vehicle F was asked to observe. It passes the spot with its camera and reports the road is clear.",
-         "move": {"CAR-006": {"segment": "ROAD-04", "direction": "forward", "position_m": 1350, "speed_kmh": 55}},
-         "report": {"vehicle_id": "CAR-006", "hazard": "road_clear", "road_segment": "ROAD-04", "distance": 50, "weather": "clear", "visibility": 9000, "sensors": ["camera", "radar"], "description": "Camera shows the right lane is clear, no debris."}},
-        {"type": "question", "narration": "Ask why the hazard was resolved.", "question": "Why was the hazard resolved?"}
+        {
+          "type": "report",
+          "t": 0,
+          "narration": "Pulse (radar only) reports possible debris",
+          "report": {
+            "vehicle_id": "CAR-008",
+            "hazard": "debris",
+            "road_segment": "ROAD-04",
+            "distance": 200,
+            "weather": "clear",
+            "visibility": 9000,
+            "sensors": [
+              "radar"
+            ],
+            "description": "Possible debris object in the right lane detected by radar only, no camera confirmation."
+          }
+        },
+        {
+          "type": "report",
+          "t": 120,
+          "narration": "Titan checks with its camera: road clear",
+          "move": {
+            "CAR-006": {
+              "segment": "ROAD-04",
+              "direction": "forward",
+              "position_m": 1350,
+              "speed_kmh": 55
+            }
+          },
+          "report": {
+            "vehicle_id": "CAR-006",
+            "hazard": "road_clear",
+            "road_segment": "ROAD-04",
+            "distance": 50,
+            "weather": "clear",
+            "visibility": 9000,
+            "sensors": [
+              "camera",
+              "radar"
+            ],
+            "description": "Camera shows the right lane is clear, no debris."
+          }
+        },
+        {
+          "type": "question",
+          "narration": "Ask: why was the hazard resolved?",
+          "question": "Why was the hazard resolved?"
+        }
       ]
     },
     {
       "id": "road_cleared",
       "title": "Road cleared",
-      "summary": "A confirmed debris hazard on Dublin Blvd is later reported clear by two independent vehicles. The agent resolves it, sends an all-clear, and stores the outcome in long-term memory.",
+      "summary": "Confirmed debris on Dublin Blvd is cleared by two independent reports and learned.",
       "weather": "clear",
       "visibility_m": 9000,
       "setup": {
-        "CAR-006": {"segment": "ROAD-03", "direction": "forward", "position_m": 1500, "speed_kmh": 45}
+        "CAR-006": {
+          "segment": "ROAD-03",
+          "direction": "forward",
+          "position_m": 1500,
+          "speed_kmh": 45
+        }
       },
       "steps": [
-        {"type": "report", "t": 0, "narration": "Vehicle F reports a mattress in the left lane of Dublin Blvd eastbound.",
-         "report": {"vehicle_id": "CAR-006", "hazard": "debris", "road_segment": "ROAD-03", "distance": 300, "weather": "clear", "visibility": 9000, "sensors": ["camera", "radar"], "description": "Mattress lying in the left lane, camera confirmed."}},
-        {"type": "report", "t": 50, "narration": "Vehicle B confirms the debris, so the agent issues a verified alert to Vehicle C.",
-         "move": {"CAR-002": {"segment": "ROAD-03", "direction": "forward", "position_m": 1650, "speed_kmh": 50}},
-         "report": {"vehicle_id": "CAR-002", "hazard": "debris", "road_segment": "ROAD-03", "distance": 150, "weather": "clear", "visibility": 9000, "sensors": ["camera", "lidar"], "description": "Mattress in the left lane."}},
-        {"type": "report", "t": 840, "narration": "Later, Vehicle D passes and reports the lane is clear.",
-         "move": {"CAR-004": {"segment": "ROAD-03", "direction": "forward", "position_m": 1760, "speed_kmh": 55}},
-         "report": {"vehicle_id": "CAR-004", "hazard": "road_clear", "road_segment": "ROAD-03", "distance": 40, "weather": "clear", "visibility": 9000, "sensors": ["camera", "lidar"], "description": "Left lane open, nothing in the road."}},
-        {"type": "report", "t": 900, "narration": "Vehicle E independently reports the lane is clear. The hazard is resolved and an all-clear is sent.",
-         "move": {"CAR-005": {"segment": "ROAD-03", "direction": "forward", "position_m": 1780, "speed_kmh": 55}},
-         "report": {"vehicle_id": "CAR-005", "hazard": "road_clear", "road_segment": "ROAD-03", "distance": 20, "weather": "clear", "visibility": 9000, "sensors": ["camera", "lidar", "radar"], "description": "Lane clear."}},
-        {"type": "question", "narration": "Ask why the hazard was resolved.", "question": "Why was the hazard resolved?"},
-        {"type": "question", "narration": "Ask what the agent has learned from feedback.", "question": "What has long-term memory learned from feedback?"}
+        {
+          "type": "report",
+          "t": 0,
+          "narration": "Titan reports a mattress in the left lane",
+          "report": {
+            "vehicle_id": "CAR-006",
+            "hazard": "debris",
+            "road_segment": "ROAD-03",
+            "distance": 300,
+            "weather": "clear",
+            "visibility": 9000,
+            "sensors": [
+              "camera",
+              "radar"
+            ],
+            "description": "Mattress lying in the left lane, camera confirmed."
+          }
+        },
+        {
+          "type": "report",
+          "t": 50,
+          "narration": "Falcon confirms the debris",
+          "move": {
+            "CAR-002": {
+              "segment": "ROAD-03",
+              "direction": "forward",
+              "position_m": 1650,
+              "speed_kmh": 50
+            }
+          },
+          "report": {
+            "vehicle_id": "CAR-002",
+            "hazard": "debris",
+            "road_segment": "ROAD-03",
+            "distance": 150,
+            "weather": "clear",
+            "visibility": 9000,
+            "sensors": [
+              "camera",
+              "lidar"
+            ],
+            "description": "Mattress in the left lane."
+          }
+        },
+        {
+          "type": "report",
+          "t": 840,
+          "narration": "Atlas reports the lane clear",
+          "move": {
+            "CAR-004": {
+              "segment": "ROAD-03",
+              "direction": "forward",
+              "position_m": 1760,
+              "speed_kmh": 55
+            }
+          },
+          "report": {
+            "vehicle_id": "CAR-004",
+            "hazard": "road_clear",
+            "road_segment": "ROAD-03",
+            "distance": 40,
+            "weather": "clear",
+            "visibility": 9000,
+            "sensors": [
+              "camera",
+              "lidar"
+            ],
+            "description": "Left lane open, nothing in the road."
+          }
+        },
+        {
+          "type": "report",
+          "t": 900,
+          "narration": "Nova reports clear: hazard resolved",
+          "move": {
+            "CAR-005": {
+              "segment": "ROAD-03",
+              "direction": "forward",
+              "position_m": 1780,
+              "speed_kmh": 55
+            }
+          },
+          "report": {
+            "vehicle_id": "CAR-005",
+            "hazard": "road_clear",
+            "road_segment": "ROAD-03",
+            "distance": 20,
+            "weather": "clear",
+            "visibility": 9000,
+            "sensors": [
+              "camera",
+              "lidar",
+              "radar"
+            ],
+            "description": "Lane clear."
+          }
+        },
+        {
+          "type": "question",
+          "narration": "Ask: why was the hazard resolved?",
+          "question": "Why was the hazard resolved?"
+        },
+        {
+          "type": "question",
+          "narration": "Ask: what has memory learned?",
+          "question": "What has long-term memory learned from feedback?"
+        }
       ]
     }
   ]

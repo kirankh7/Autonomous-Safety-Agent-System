@@ -93,7 +93,7 @@ def test_retrieval_changes_the_decision_on_a_cold_start_segment():
 def test_research_answers_cite_actual_records():
     report("CAR-001", 500)
     report("CAR-002", 450, t=40)
-    answer = research.ask("Why was an alert generated for Vehicle C?")
+    answer = research.ask("Why was an alert generated for Comet?")
     ids = {e["id"] for e in answer["evidence"]}
     assert {"RPT-001", "RPT-002"} <= ids
     for rid in ids:                             # every cited ID exists in memory
@@ -143,7 +143,7 @@ def test_claude_research_agent_loop_with_fake_client(monkeypatch):
         beta = NS(messages=FakeMessages())
 
     monkeypatch.setattr(research_agent, "make_client", lambda: FakeClient())
-    result = research_agent.ask("Why was an alert generated for Vehicle C?")
+    result = research_agent.ask("Why was an alert generated for Comet?")
 
     assert [s["tool"] for s in result["agent_steps"]] == ["get_alerts", "get_vehicle_reports"]
     assert {e["id"] for e in result["evidence"]} == {"ALT-003", "RPT-001", "RPT-002", "HZ-001"}

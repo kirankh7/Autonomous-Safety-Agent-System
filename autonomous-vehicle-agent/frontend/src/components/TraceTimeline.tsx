@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { ChevronRight, Wrench } from "lucide-react";
 import type { TraceStep } from "../types";
+import { SignalChip } from "./Signals";
+import { AGENT_COLORS } from "./ui";
+
+export { AGENT_COLORS };
 
 // The workflow stages in the order the LangGraph runs them.
 export const STAGES = [
@@ -13,19 +17,17 @@ export const STAGES = [
   { key: "memory", label: "Update Memory" },
 ];
 
-// Agent identity colours (categorical slots); the agent name is always shown next to the dot.
-export const AGENT_COLORS: Record<string, string> = {
-  "Hazard Analysis Agent": "#3987e5",
-  "Research & Memory Agent": "#d95926",
-  "Verification Agent": "#199e70",
-  "Alert Agent": "#9085e9",
+
+const AGENT_SHORT: Record<string, string> = {
+  "Hazard Analysis Agent": "Analysis", "Research & Memory Agent": "Research & Memory",
+  "Verification Agent": "Verification", "Alert Agent": "Alert",
 };
 
-export function AgentTag({ agent }: { agent: string }) {
+export function AgentTag({ agent, short }: { agent: string; short?: boolean }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ink">
+    <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs font-medium text-ink" title={agent}>
       <span className="h-2 w-2 rounded-full" style={{ background: AGENT_COLORS[agent] ?? "#898781" }} />
-      {agent}
+      {short ? AGENT_SHORT[agent] ?? agent : agent}
     </span>
   );
 }
@@ -59,37 +61,33 @@ export function Pipeline({ steps, selected, onSelect }: {
   );
 }
 
-export default function TraceTimeline({ steps, stageFilter, compact = false }: {
-  steps: TraceStep[]; stageFilter?: string | null; compact?: boolean;
+export default function TraceTimeline({ steps, stageFilter, expandAll = false }: {
+  steps: TraceStep[]; stageFilter?: string | null; expandAll?: boolean;
 }) {
   const [open, setOpen] = useState<number | null>(null);
   const shown = stageFilter ? steps.filter((s) => s.stage === stageFilter) : steps;
   const label = (key: string) => STAGES.find((s) => s.key === key)?.label ?? key;
 
   return (
-    <ol className="relative space-y-2 border-l border-axis pl-4">
+    <ol className="relative space-y-1.5 border-l border-axis pl-4">
       {shown.map((s) => {
-        const expanded = !compact || open === s.step;
+        const expanded = expandAll || open === s.step;
         return (
           <li key={`${s.run_id}-${s.step}`} className="relative">
             <span className="absolute -left-[21px] top-3 h-2.5 w-2.5 rounded-full border-2 border-surface"
                   style={{ background: AGENT_COLORS[s.agent] ?? "#898781" }} />
             <button onClick={() => setOpen(open === s.step ? null : s.step)}
-                    className="w-full rounded-lg border border-hairline bg-surface-2 p-3 text-left hover:border-axis">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted tabular">#{s.step}</span>
-                  <span className="text-xs font-semibold uppercase tracking-wide text-ink-2">{label(s.stage)}</span>
-                  <AgentTag agent={s.agent} />
-                </div>
-                {s.confidence !== null && s.confidence !== undefined && (
-                  <span className="rounded bg-page px-2 py-0.5 text-xs tabular text-ink">
-                    confidence {s.confidence.toFixed(2)}
-                  </span>
-                )}
+                    className="w-full rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-left hover:border-axis">
+              <div className="flex items-center gap-3">
+                <span className="w-4 shrink-0 text-xs text-muted tabular">{s.step}</span>
+                <span className="w-36 shrink-0 text-[11px] font-semibold uppercase leading-tight tracking-wide text-ink-2">{label(s.stage)}</span>
+                <span className="min-w-0 flex-1">
+                  {s.signal ? <SignalChip signal={s.signal} /> : <span className="truncate text-xs text-ink-2">{s.result}</span>}
+                </span>
+                <AgentTag agent={s.agent} short />
               </div>
               {expanded && (
-                <div className="mt-2 grid gap-1.5 text-sm">
+                <div className="mt-2 grid gap-1.5 border-t border-hairline pt-2 text-sm">
                   <Row label="Reason" text={s.thought} />
                   <Row label="Action" text={s.action} />
                   <div className="flex gap-2">
@@ -101,7 +99,6 @@ export default function TraceTimeline({ steps, stageFilter, compact = false }: {
                   <Row label="Result" text={s.result} strong />
                 </div>
               )}
-              {!expanded && <div className="mt-1 truncate text-sm text-ink-2">{s.result}</div>}
             </button>
           </li>
         );
