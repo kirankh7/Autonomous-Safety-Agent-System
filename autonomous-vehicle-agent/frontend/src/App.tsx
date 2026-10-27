@@ -80,7 +80,7 @@ export default function App() {
         </nav>
         <div className="space-y-1 border-t border-hairline p-4 text-[11px] text-muted">
           <div>Simulated data only. Alerts are advisory and never control vehicles.</div>
-          {state && <div>LLM: {state.config.llm_provider} - embeddings: {state.config.embeddings}</div>}
+          {state && <div>LLM: {state.config.llm_provider}<br />Vector DB: {state.config.vector_db}</div>}
           <div>CMU Agentic AI capstone - Kiran Haridas</div>
         </div>
       </aside>

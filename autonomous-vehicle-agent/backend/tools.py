@@ -142,8 +142,11 @@ def find_matching_hazards(segment: str, direction: str, position_m: float,
 
 def retrieve_similar_incidents(query: str, hazard_type: str | None = None, k: int = 3,
                                use_mmr: bool = False) -> list[dict]:
-    """Tool: semantic search over long-term memory (RAG)."""
-    return rag_index.search(query, k=k, hazard_type=hazard_type, use_mmr=use_mmr)
+    """Tool: semantic search over long-term memory (RAG) in the vector database.
+    Without MMR it is a precise lookup for confidence scoring (strict similarity threshold);
+    with MMR it is a broader research search (looser threshold, diverse results)."""
+    return rag_index.search(query, k=k, hazard_type=hazard_type, use_mmr=use_mmr,
+                            purpose="research" if use_mmr else "scoring")
 
 
 def history_adjustment(incidents: list[dict]) -> tuple[float, list[str]]:

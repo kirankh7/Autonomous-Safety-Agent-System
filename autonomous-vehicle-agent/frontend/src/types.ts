@@ -189,7 +189,7 @@ export interface AppState {
   incident_types: Record<string, number>;
   agents: AgentInfo[];
   simulation: SimStatus;
-  config: { llm_provider: string; embeddings: string; rules: Record<string, number> };
+  config: { llm_provider: string; vector_db: string; rules: Record<string, number> };
 }
 
 export interface ChatMessage {

@@ -48,7 +48,7 @@ flowchart LR
     subgraph Memory
         STM[("Short-term memory<br/>SQLite: vehicles, reports,<br/>active hazards, alerts, traces")]
         LTM[("Long-term memory<br/>SQLite: resolved incidents")]
-        VEC[("FAISS vector index<br/>incident embeddings")]
+        VEC[("ChromaDB vector database<br/>incident embeddings + metadata")]
     end
 
     RA["Research Assistant (Agent 4)<br/>chat, grounded answers + cited IDs"]
@@ -70,7 +70,7 @@ flowchart LR
 | Backend API | Python, FastAPI |
 | Agent workflow | LangGraph (`backend/agents.py`) |
 | Memory | SQLite (`backend/memory.py`, `backend/database.py`) |
-| RAG | TF-IDF or sentence-transformer embeddings in a FAISS index (`backend/rag.py`) |
+| RAG / vector DB | ChromaDB (persistent, local) with all-MiniLM-L6-v2 embeddings; FAISS + TF-IDF offline fallback (`backend/rag.py`) |
 | LLM | Mock by default; optional Anthropic or OpenAI (`backend/llm.py`) |
 | Frontend | React + Vite + TypeScript, Tailwind CSS, Recharts, Leaflet with OpenStreetMap |
 | Data | JSON files in `data/`: 8 vehicles (named Tesla Model 3, Toyota Prius, Ford Transit, Mercedes Sprinter, Jaguar I-PACE, Volvo Truck, Hyundai Ioniq 5, Nissan Leaf), 5 road segments, 20 incidents, 5 scenarios |
@@ -82,7 +82,7 @@ autonomous-vehicle-agent/
 │   ├── agents.py       LangGraph workflow (agents 1-4) and process_report()
 │   ├── tools.py        agent tools, confidence rules, simple road geometry
 │   ├── memory.py       short-term and long-term memory
-│   ├── rag.py          embeddings, FAISS index, metadata pre-filter, MMR
+│   ├── rag.py          vector database (ChromaDB / FAISS), metadata filter, MMR
 │   ├── research.py     Research Assistant (grounded Q&A with evidence IDs)
 │   ├── llm.py          mock / Anthropic / OpenAI answer phrasing
 │   ├── simulation.py   step-by-step scenario runner
@@ -115,7 +115,7 @@ Each vehicle report is one run through the LangGraph:
    Vehicles on the opposite carriageway, or already past the hazard, are not alerted. A vehicle never gets
    the same message type twice.
 5. **Research & Memory Agent (update).** Calls `update_hazard_memory()` to save the report and hazard. When a
-   hazard is resolved, it writes the outcome to long-term memory and rebuilds the RAG index.
+   hazard is resolved, it writes the outcome to long-term memory and adds it to the vector database.
 
 ### Confidence rules
 
@@ -179,13 +179,22 @@ The agents' tools are plain Python functions in `backend/tools.py`:
 - **Chunks:** each incident is one chunk, a metadata header followed by the narrative, for example
   `flooding | underpass | heavy rain [SEP] Standing water across both lanes...`. Prefixing the title like this
   follows Dense Passage Retrieval (Karpukhin et al., 2020).
-- **Index:** chunks are embedded and stored in a FAISS inner-product index.
-  - The default embedding is TF-IDF, which runs offline with nothing to download.
-  - Set `EMBEDDINGS=sentence-transformers` to use `all-MiniLM-L6-v2`.
-- **Retrieval:** a metadata **pre-filter** on hazard type, then a similarity threshold, then ranking:
-  - **Confidence scoring** uses the top 3 by pure relevance, because this is a narrow, precision-critical query.
-  - **Research questions** use the top 5 with **MMR** (λ = 0.5, Carbonell & Goldstein, 1998), so a broad
-    question gets varied incidents instead of near-duplicates.
+- **Vector database: ChromaDB.** Each chunk is stored with its embedding and metadata (hazard type, segment,
+  outcome, source).
+  - Embeddings come from `all-MiniLM-L6-v2`, a 384-dimensional sentence model that ChromaDB runs locally. It
+    downloads once, about 80 MB.
+  - Similarity is cosine.
+  - The database persists on disk in `chroma_db/`.
+  - SQLite remains the source of truth for incidents. ChromaDB is kept in sync: learned incidents are added, and
+    a full memory reset removes them.
+  - **Fallback:** set `VECTOR_DB=faiss` to run fully offline with a FAISS index over TF-IDF vectors. The app
+    also switches to this automatically if ChromaDB can't start. All scenario scores are the same on both.
+- **Retrieval:** the hazard-type **metadata filter runs inside the vector query**
+  (`where={"hazard_type": ...}`), then a similarity threshold, then ranking:
+  - **Confidence scoring** uses the top 3 by pure relevance with a strict threshold (cosine ≥ 0.75), because
+    this is a narrow, precision-critical query.
+  - **Research questions** use the top 5 with **MMR** (λ = 0.5, Carbonell & Goldstein, 1998) and a looser
+    threshold (≥ 0.45), so a broad question gets varied incidents instead of near-duplicates.
 - **Cold start (Checkpoint 3.1):** semantic retrieval only changes confidence on segments with fewer than 3 past
   incidents. Segments with their own history use an exact lookup of that history instead. Live evidence always
   outweighs history: one road-clear report (−0.30) beats the full ±0.15 history effect.
@@ -196,7 +205,7 @@ telling the vehicle to reroute.
 
 ### Feedback loop
 Road-clear reports lower confidence and resolve hazards. The resolved outcome is stored in long-term memory and
-the RAG index is rebuilt, so the next similar report is scored with that outcome. For example, after the fog
+added to the vector database, so the next similar report is scored with that outcome. For example, after the fog
 scenario, I-580 has a confirmed stopped-truck incident of its own. Replaying the scenario without resetting
 memory starts at 0.55 instead of 0.50.
 

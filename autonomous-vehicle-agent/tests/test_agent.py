@@ -2,7 +2,9 @@
 import os
 import tempfile
 
-os.environ["DB_PATH"] = os.path.join(tempfile.mkdtemp(), "test.db")
+_tmp = tempfile.mkdtemp()
+os.environ["DB_PATH"] = os.path.join(_tmp, "test.db")
+os.environ["CHROMA_PATH"] = os.path.join(_tmp, "chroma")
 os.environ["LLM_PROVIDER"] = "mock"
 
 import pytest  # noqa: E402

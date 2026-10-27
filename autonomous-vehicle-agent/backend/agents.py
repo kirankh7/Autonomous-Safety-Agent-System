@@ -331,7 +331,7 @@ def update_memory(state: AgentState) -> dict:
               f"{hazard['confidence']:.2f}) to short-term memory")
     if incident:
         result += (f". Resolved hazard written to long-term memory as {incident['id']} "
-                   f"(outcome: {incident['outcome'].replace('_', ' ')}); RAG index rebuilt with "
+                   f"(outcome: {incident['outcome'].replace('_', ' ')}); vector database now holds "
                    f"{len(memory.incidents())} incidents")
     trace = [step(RESEARCH_MEMORY, "memory",
                   "Remember what happened so later questions and future reports can use it.",

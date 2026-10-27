@@ -2,6 +2,7 @@
 node_modules/
 frontend/dist/
 agent.db
+chroma_db/
 .env
 __pycache__/
 .pytest_cache/
