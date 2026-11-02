@@ -5,100 +5,73 @@
 
 ## 1. Is ToT Appropriate?
 
-**Decision: yes, but only in one place: resolving conflicting reports.**
+**Decision: no. Tree-of-Thought (ToT) would make this agent slower and less predictable without making it more accurate.**
 
-Most reports have one obvious meaning, and the Checkpoint 3.1 confidence rules handle them in milliseconds. Running ToT on every report would add delay for no accuracy gain. ToT helps when **several nearby reports disagree**, so that more than one explanation fits the evidence and each explanation leads to a different alert.
+ToT helps when a problem has many possible paths and the model must explore and compare them before answering, as in puzzles, planning, or creative writing. I looked at whether my agent has a problem like that. It does not, for four reasons.
 
-## 2. Where ToT Is Used
+1. **The hard part is missing evidence, not missing reasoning.** The agent decides whether a hazard report is real and which vehicles to warn. When it is unsure, more thinking does not help. What helps is a new observation. The agent already handles this by asking approaching vehicles to report what they see. One new report settles the question more reliably than any number of reasoning branches.
+2. **There are only a few possible decisions.** Every report leads to one of four actions: verified alert, caution advisory, wait and request observations, or resolve. The confidence score and thresholds from Checkpoint 3.1 choose among them. With only four outcomes and a clear rule, there is no tree worth exploring.
+3. **Speed matters.** In the fog example, Vehicle C is 550 m away at 90 km/h, about 22 seconds from the hazard. A ToT search with 3 branches and 3 levels needs many LLM calls and can take several seconds. The current rule-based path decides in milliseconds.
+4. **Safety decisions must be repeatable and explainable.** The same reports should always produce the same alert. ToT relies on an LLM to generate and score branches, and those scores can vary from run to run. The current design records a simple score trace (for example, "0.50 + 0.20 confirmation = 0.70, verified alert"), so an operator can audit any decision.
 
-**Workflow location:** a new **Conflict Resolution** step between the Hazard Analysis Agent and the Verification Agent. It runs only when reports within 200 m and 3 minutes disagree on hazard type or presence, or when a report matches more than one active event.
+## 2. Where I Considered Using ToT
 
-**Example.** On ROAD-01 in fog, Vehicle A reports a stopped truck at 3,500 m. Forty seconds later, Vehicle B reports debris at 3,580 m. Twenty seconds after that, Vehicle C reports "road clear" at 3,500 m.
+The one place ToT looked useful is **conflicting reports**. For example, in fog, Vehicle A reports a stopped truck at 3,500 m, Vehicle B reports debris at 3,580 m, and Vehicle C reports "road clear." Several explanations fit: the truck shed its load, there are two hazards, A misclassified debris, or the road has been cleared.
 
-**Why linear chain-of-thought fails here:**
+ToT would explore these explanations internally. My design handles the conflict without it:
 
-- **Premature commitment.** Today, `find_matching_hazards()` greedily uses a 50 m radius. B is 80 m away, so it opens a separate debris event. C's "clear" then lowers the truck's confidence by 0.3. Once made, those choices are never revisited.
-- **High branching.** At least four explanations fit: (H1) the truck shed its load, so this is one event spread over 80 m; (H2) there are two separate hazards; (H3) A misclassified debris as a truck; (H4) the hazard has been cleared. Each one alerts different vehicles with different messages.
-- **Constraint complexity.** Each explanation must satisfy geometry, lane, timing, source reliability, and the safety exception at once. A single chain may find a violation only after it has acted.
+- Each report adjusts confidence by a fixed rule: +0.20 for a confirmation, −0.30 for "road clear."
+- Mixed evidence lands in the **caution band (0.40–0.60)**, so approaching vehicles still get a caution advisory and an observation request.
+- The **safety exception** means a high-severity hazard in visibility under 200 m always gets at least a caution advisory.
+- A hazard is resolved only after **two independent "clear" reports**, so one conflicting report cannot cancel a warning.
+- The next vehicle to pass the spot provides real evidence, and confidence moves up or down accordingly.
 
-## 3. ToT Structure
+I did find one weakness: reports are matched to an event only within 50 m, so the debris report 80 m away opens a separate event. The fix is a simple rule, not ToT: related hazard types, such as a stopped truck and debris, can be matched within 150 m.
 
-- **Thought:** a structured, partial *world hypothesis*, i.e. a JSON object (not free text) describing which reports belong to which event, what each event is, and what to do about it.
-- **Node:** one hypothesis state plus its score and the evidence IDs it explains. The root holds the conflicting reports and active events.
-- **Branch:** one alternative choice at a level, such as "B joins A's event" versus "B is a new event."
-- **Depth:** three fixed levels:
-  1. **Association:** which reports belong to which event (merge, split, or discard as false).
-  2. **Interpretation:** each event's type and state (present, moved, misclassified, or cleared).
-  3. **Action plan:** alert level per event (from the 3.1 thresholds) and which vehicles receive it.
-- **Branching factor:** up to 4 children per node. **Depth limit:** 3.
-- **Termination:** stop when depth 3 is reached, when the best leaf scores ≥ 0.80 and leads the runner-up by ≥ 0.10 (early stop), or when the budget runs out. The controller then outputs the best complete action plan.
+## 3. The Reasoning Approach That Fits Best
 
-## 4. Search and Evaluation Strategy
+**ReAct with a verifier and a feedback loop**, the design from Checkpoint 2.1, already built in the prototype with LangGraph.
 
-**Primary strategy: beam search (width k = 3).** BFS keeps every node (4 + 16 + 64 = 84 nodes), too many for a sub-second budget. DFS commits to one line of reasoning, which is the same premature-commitment problem I am trying to fix. Monte Carlo sampling adds randomness to safety decisions that need to be reproducible. Beam search keeps a few competing explanations alive at each level, with a fixed cost of at most 4 + 12 + 12 = 28 nodes.
+- **ReAct (Reason → Act → Observe):** each agent reasons about the report, calls a tool (event lookup, along-road distance, past-incident retrieval), and uses the result to decide the next step.
+- **Verifier:** confidence rules check every hazard before an alert is sent.
+- **Feedback loop (Reflexion style):** vehicles that receive alerts report whether the hazard was really there. Those outcomes are saved to long-term memory and used for future reports.
 
-**Evaluation is in two stages:**
+**Workflow:**
 
-1. **Hard constraint checks (deterministic tools; any failure sets the score to 0):** along-road distance and carriageway from the geospatial tool; physical plausibility (for example, a stopped truck cannot move 300 m in 20 s); time window; and the **safety exception**, meaning a plan may never give less than a caution advisory for a high-severity hazard in visibility under 200 m.
-2. **Soft rubric (0–1 weighted score):**
+1. Vehicle report arrives.
+2. **Hazard Analysis Agent** classifies the hazard, places it on the road, and matches it to existing events.
+3. **Research & Memory Agent** retrieves similar past incidents for new hazards.
+4. **Verification Agent** applies the confidence rules and picks one of the four actions.
+5. **Alert Agent** warns only the vehicles approaching the hazard, or requests observations when unsure.
+6. **Research & Memory Agent** saves the outcome to memory.
 
-| Criterion | Weight | Source |
+There is no ToT step in this workflow. Uncertainty is handled at steps 4 and 5 by asking for more evidence.
+
+## 4. Why This Works Better Than ToT
+
+| | ToT | ReAct + verifier + feedback |
 |---|---|---|
-| Evidence coverage: share of reports the hypothesis explains | 0.30 | Heuristic |
-| Source reliability agreement | 0.25 | Long-term memory |
-| Historical prior from similar incidents (±0.15 cap from 3.1) | 0.15 | RAG / ChromaDB |
-| Parsimony: fewer events and fewer "false report" claims | 0.10 | Heuristic |
-| Critic plausibility judgement | 0.20 | LLM critic |
+| How uncertainty is handled | Explores more reasoning branches | Collects a new observation from a vehicle |
+| Time per decision | Seconds (many LLM calls) | Milliseconds (rules and tools) |
+| Cost | Many LLM calls per report | Few or none on the alert path |
+| Same input → same output | Not guaranteed | Yes |
+| Explaining a decision | Long tree of branches | Short score trace with evidence IDs |
 
-**Who evaluates:** tool checks run first, so the LLM critic only sees physically possible branches. Following Cobbe et al. (2021), judging is easier than generating, but verifiers can be fooled, so the critic is grounded by tools.
+ToT improves accuracy when the right answer can be reached by thinking harder. In my project, the right answer comes from the road, so the agent should act and observe rather than deliberate.
 
-**Pruning:** discard any branch that fails a hard check or scores < 0.40, then keep the top 3.
+## 5. Risk and Mitigation
 
-**Tie-breaking (scores within 0.05):** (1) prefer the more cautious plan, because a missed hazard costs more than a false alarm; (2) then prefer fewer events; (3) then let the critic rerank the tied pair.
+**Risk:** without exploring alternatives, the agent may commit too early to a wrong interpretation, for example by treating a real hazard as cleared after one "road clear" report.
 
-**Failure conditions:** if every branch is pruned, or the budget runs out with no complete plan, the system falls back to the existing linear rules, sends at least a caution advisory, and flags the event for a human fleet operator.
+**Mitigation:** the agent never makes a final decision on weak evidence. Mixed evidence keeps a caution advisory active, one "clear" report cannot resolve a hazard on its own, observation requests gather new evidence, and events that stay conflicting for more than 2 minutes are escalated to a human fleet operator. I will test this with the existing `false_report` and `road_cleared` scenarios and a new conflicting-reports scenario.
 
-**Compute, latency, and cost limits:** 1.5 s and 12 LLM calls per conflict. Levels 1 and 3 are generated by rules; the LLM generates only level 2 interpretations, and critic calls run in parallel. Meanwhile the deterministic path still sends its provisional advisory, so ToT never delays a warning; it only refines one.
+## 6. When ToT Could Be Added Later
 
-## 5. Mapping ToT Roles to Tools
-
-| ToT role | Tool | Why |
-|---|---|---|
-| **Thought generator**: "Hypothesis Agent" proposes children | **CrewAI** agent with its own role, goal, and output schema | Role separation means the generator cannot grade its own ideas. |
-| **Critic / evaluator**: "Safety Critic Agent" plus tool checks | **CrewAI** agent for plausibility; **LangChain** tools wrap `distance_ahead()`, `find_approaching_vehicles()`, `retrieve_similar_incidents()` | An independent critic, calling the same geometry functions the production path uses. |
-| **Controller / decision maker** | **LangChain** (LCEL `RunnableParallel` for expanding and scoring a level; runs as a node inside the existing LangGraph) | Selection, pruning, and budgets are testable code, not LLM output. |
-| **Memory / state manager** | **MCP** server (`tot-state`) exposing `create_node`, `get_frontier`, `prune`, and `get_path`, plus the event store as a resource | CrewAI and LangChain share one tree through one protocol, so branch state never diverges; parent IDs let the Research Assistant explain the path later. |
-
-## 6. Updated Architecture
-
-```
-Vehicle report
-     │
-     ▼
-Hazard Analysis Agent ──(no conflict)──────────────────────────────┐
-     │ conflict trigger                                            │
-     ▼                                                             │
-┌─────────── Conflict Resolution (ToT, ≤1.5 s) ───────────┐        │
-│ LangChain controller (beam k=3, depth 3)                │        │
-│   ├─ CrewAI Hypothesis Agent → children                 │        │
-│   ├─ Tool checks (geometry, time, safety exception)     │        │
-│   ├─ CrewAI Safety Critic → rubric score                │        │
-│   └─ prune / select ◄──► MCP tot-state server           │        │
-└──────────────┬──────────────────────────────────────────┘        │
-               │ best plan (or fallback + operator flag)           │
-               ▼                                                   ▼
-        Research & Memory Agent (RAG) ──► Verification Agent ──► Alert Agent ──► Memory update
-                                                                  (logs ToT path)
-```
-
-## 7. Risk and Mitigation
-
-**Risk: weak evaluation signals prune the correct branch.** In fog, the true hazard often has the least evidence, such as one report from a low-reliability sensor. The rubric could rank "H4: cleared" above "H1: truck present" and drop the real hazard.
-
-**Mitigation: a protected safety slot.** The beam always keeps the highest-severity "hazard present" branch that passes the hard checks, as a fourth slot outside k = 3, even if it scores below 0.40. If it does not win, it still keeps a caution advisory active until a second independent "clear" report arrives (the 3.1 resolution rule). I will test this with the `false_report` and `road_cleared` scenarios plus a new conflicting-reports scenario, checking that ToT never resolves a hazard that is actually present.
+ToT may be useful outside the real-time alert path, where speed does not matter. One example is the Research Assistant planning a multi-step investigation for an operator, such as "Why do false alarms keep happening on Segment 14?" If I add it there, CrewAI could define separate generator and critic agents, LangChain could control the search, and MCP could share state between branches. For the safety-critical alert path, I am deliberately keeping a simple, fast, and predictable design.
 
 ## References
 
 - Yao, S., et al. (2023). *Tree of Thoughts: Deliberate Problem Solving with Large Language Models.* NeurIPS 2023. arXiv:2305.10601.
+- Yao, S., et al. (2023). *ReAct: Synergizing Reasoning and Acting in Language Models.* ICLR 2023. arXiv:2210.03629.
+- Shinn, N., et al. (2023). *Reflexion: Language Agents with Verbal Reinforcement Learning.* arXiv:2303.11366.
 - Cobbe, K., et al. (2021). *Training Verifiers to Solve Math Word Problems.* arXiv:2110.14168.
-- Wei, J., et al. (2022). *Chain-of-Thought Prompting Elicits Reasoning in Large Language Models.* NeurIPS 2022. arXiv:2201.11903.
