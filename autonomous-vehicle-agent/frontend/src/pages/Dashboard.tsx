@@ -3,10 +3,11 @@ import type { AppState, Run } from "../types";
 import { ConfidenceChart, HazardTypeChart } from "../components/Charts";
 import { AlertRow, SignalStrip } from "../components/Signals";
 import { AgentLegend } from "../components/TraceTimeline";
+import BenchmarkPanel from "../components/BenchmarkPanel";
 import { Panel, StatCard, StatusBadge, decisionStatus, fmtType } from "../components/ui";
 
 // Routine bookkeeping signals hidden from the summary view.
-const QUIET = ["NO MATCH", "PRIOR REPORTS", "SAVED", "MATCH", "RAG"];
+const QUIET = ["NO MATCH", "PRIOR REPORTS", "SAVED", "MATCH", "RAG", "ASK HISTORY"];
 
 export default function Dashboard({ state, runs, go }: { state: AppState; runs: Run[]; go: (page: string) => void }) {
   const { stats, hazards, alerts, simulation } = state;
@@ -75,6 +76,8 @@ export default function Dashboard({ state, runs, go }: { state: AppState; runs: 
           </Panel>
         </div>
       </div>
+
+      <BenchmarkPanel />
     </div>
   );
 }

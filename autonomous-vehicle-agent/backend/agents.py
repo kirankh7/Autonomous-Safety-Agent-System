@@ -1,13 +1,26 @@
-r"""The agent workflow: four agents connected as a small LangGraph.
+r"""The agent workflow: four agents coordinated as a LangGraph (hybrid: a sequential fast path
+plus one conditional, two-way loop).
 
-    report -> [Hazard Analysis] -> (new hazard?) -> [Research & Memory: retrieve] -> [Verification]
-                               \-> (update)    --------------------------------> [Verification]
-                               \-> (clear, nothing to clear) ------------------------------> [Memory]
-           [Verification] -> [Alert] -> [Research & Memory: update memory] -> END
+    report -> [Hazard Analysis] --(hazard event)--> [Verification] --(decision)--> [Alert]
+                     |                               |    ^                           |
+                     | (clear, nothing to clear)     |    | history reply             v
+                     |                    history    v    |              [Research & Memory: update]
+                     |                    request [Research & Memory: retrieve]        |
+                     \----------------------------------------------------------------> END
+
+- One-way handoffs on the fast path (Analysis -> Verification -> Alert -> Memory): each agent
+  passes a typed message to the next and never waits for a reply.
+- Two-way validation where evidence is needed: for a new hazard, Verification sends a
+  history_request to Research & Memory and loops back when the history_reply arrives. If
+  retrieval fails, Research & Memory replies "unavailable" and Verification fails over to the
+  rules without history, so an alert is never blocked by the vector database.
+- Two-way with the fleet: an observation request from the Alert Agent is answered by a vehicle's
+  next report, which Hazard Analysis links back to the request.
 
 Each node follows a ReAct pattern: it states a Thought about the current observation, takes an
-Action by calling a tool, and records the tool's result (Observation), which drives the next step.
-Decisions are rule-based and transparent; every step is written to an execution trace.
+Action by calling a tool (through the MCP-style registry, tools.call_tool), and records the
+tool's result (Observation), which drives the next step. Decisions are rule-based and
+transparent; every step is written to an execution trace and every handoff to a message log.
 """
 import operator
 from typing import Annotated, TypedDict
@@ -17,6 +30,7 @@ from langgraph.graph import END, StateGraph
 from backend import memory
 from backend import tools as T
 from backend.rag import query_text
+from backend.tools import ToolError, call_tool
 
 # The four agents, defined once; the API serves this list to the dashboard.
 AGENTS = [
@@ -52,13 +66,25 @@ class AgentState(TypedDict, total=False):
     decision: str
     alerts: list
     stored_incident: dict | None
+    history_requested: bool  # Verification asked Research & Memory for history (two-way)
+    history_ready: bool      # Research & Memory has replied
+    escalation: str | None   # reason to hand the hazard to the human fleet operator
     trace: Annotated[list, operator.add]
+    messages: Annotated[list, operator.add]   # typed inter-agent messages
 
 
 def step(agent: str, stage: str, thought: str, action: str, tool: str, result: str,
          confidence: float | None = None, signal: dict | None = None) -> dict:
     return {"agent": agent, "stage": stage, "thought": thought, "action": action,
             "tool": tool, "result": result, "confidence": confidence, "signal": signal}
+
+
+def msg(sender: str, receiver: str, kind: str, content: str, protocol: str = "one_way",
+        **payload) -> dict:
+    """A typed message from one agent to another (or to a vehicle).
+    protocol: one_way (handoff, no reply expected) | two_way (request or reply)."""
+    return {"sender": sender, "receiver": receiver, "kind": kind, "protocol": protocol,
+            "content": content, "payload": payload}
 
 
 def sig(label: str, detail: str = "", tone: str = "neutral") -> dict:
@@ -70,13 +96,18 @@ def sig(label: str, detail: str = "", tone: str = "neutral") -> dict:
 DECISION_SIGNAL = {"verified": ("VERIFIED", "critical"), "caution": ("CAUTION", "warning"),
                    "wait": ("NEED EVIDENCE", "serious"), "resolved": ("RESOLVED", "good")}
 ALERT_SIGNAL = {"verified": ("ALERT", "critical"), "caution": ("CAUTION", "warning"),
-                "observation_request": ("LOOK REQUEST", "serious"), "all_clear": ("ALL CLEAR", "good")}
-SEVERITY_TONE = {"critical": "critical", "high": "serious", "medium": "warning", "low": "info"}
+                "observation_request": ("LOOK REQUEST", "serious"), "all_clear": ("ALL CLEAR", "good"),
+                "escalation": ("ESCALATED", "critical")}
+FLEET_OPERATOR = "Fleet operator"
 
 
 def car_name(vehicle_id: str) -> str:
+    if vehicle_id == T.OPERATOR_ID:
+        return FLEET_OPERATOR
     v = memory.get_vehicle(vehicle_id)
     return v["name"] if v else vehicle_id
+SEVERITY_TONE = {"critical": "critical", "high": "serious", "medium": "warning", "low": "info"}
+
 
 
 def decision_for(confidence: float) -> str:
@@ -120,21 +151,24 @@ def hazard_analysis(state: AgentState) -> dict:
                           signal=sig("EXPIRED", ", ".join(expired))))
 
     is_clear = hazard_type == "road_clear"
-    matches = T.find_matching_hazards(segment, obs["direction"], position,
-                                      None if is_clear else hazard_type)
+    matches = call_tool("find_matching_hazards", segment, obs["direction"], position,
+                        None if is_clear else hazard_type)
     trace.append(step(
         HAZARD_ANALYSIS, "check_existing",
         "Does this report describe a hazard we are already tracking?",
-        f"Search active hazards within {T.MATCH_RADIUS_M} m on the same carriageway",
+        f"Search active hazards within {T.MATCH_RADIUS_M} m on the same carriageway "
+        f"({T.RELATED_MATCH_RADIUS_M} m for a related obstruction)",
         f"find_matching_hazards({segment}, {obs['direction']}, {obs['position_m']}"
         f"{'' if is_clear else ', ' + hazard_type})",
-        f"Match found: {matches[0]['id']} (confidence {matches[0]['confidence']:.2f})" if matches
-        else "No matching active hazard",
+        (f"Match found: {matches[0]['id']} (confidence {matches[0]['confidence']:.2f})"
+         + (f"; related type {matches[0]['hazard_type'].replace('_', ' ')}, treated as the same "
+            "obstruction" if not is_clear and matches[0]["hazard_type"] != hazard_type else ""))
+        if matches else "No matching active hazard",
         signal=sig("MATCH", matches[0]["id"]) if matches else sig("NO MATCH", "not tracked yet")))
 
     if matches:
         hazard = matches[0]
-        earlier = T.get_vehicle_reports(hazard["id"])
+        earlier = call_tool("get_vehicle_reports", hazard["id"])
         trace.append(step(
             HAZARD_ANALYSIS, "check_existing",
             f"This report updates {hazard['id']}. Which vehicles have already reported it?",
@@ -143,14 +177,27 @@ def hazard_analysis(state: AgentState) -> dict:
             f"{', '.join(sorted({r['vehicle_id'] for r in earlier})) or 'none'}",
             signal=sig("PRIOR REPORTS", f"{len(earlier)} · "
                        + ", ".join(sorted({car_name(r['vehicle_id']) for r in earlier})))))
-        return {"observation": obs, "hazard": hazard, "is_new": False, "trace": trace}
+        messages = []
+        asked = [a for a in memory.alerts(hazard_id=hazard["id"])
+                 if a["vehicle_id"] == vehicle["id"] and a["level"] == "observation_request"]
+        if asked:  # this report answers an earlier observation request (two-way with the fleet)
+            messages.append(msg(vehicle["name"], HAZARD_ANALYSIS, "observation_reply",
+                                f"Reply to {asked[0]['id']}: {hazard_type.replace('_', ' ')}",
+                                "two_way", in_reply_to=asked[0]["id"], hazard_id=hazard["id"]))
+        messages.append(msg(HAZARD_ANALYSIS, VERIFICATION, "hazard_update",
+                            f"{hazard['id']}: new {'road-clear' if is_clear else 'confirming'} report "
+                            f"from {vehicle['name']}", hazard_id=hazard["id"], report_type=hazard_type))
+        return {"observation": obs, "hazard": hazard, "is_new": False, "trace": trace,
+                "messages": messages}
 
     if is_clear:
         trace.append(step(HAZARD_ANALYSIS, "check_existing",
                           "A road-clear report with no active hazard here needs no action.",
                           "Record the report only", "-", "Nothing to clear",
                           signal=sig("NOTHING TO CLEAR")))
-        return {"observation": obs, "hazard": None, "is_new": False, "trace": trace}
+        return {"observation": obs, "hazard": None, "is_new": False, "trace": trace,
+                "messages": [msg(HAZARD_ANALYSIS, RESEARCH_MEMORY, "record_only",
+                                 f"Road-clear report from {vehicle['name']}; no hazard to update")]}
 
     severity, action = T.severity_for(hazard_type, obs["visibility_m"])
     hazard = {
@@ -168,13 +215,14 @@ def hazard_analysis(state: AgentState) -> dict:
         f"Created {hazard['id']}: {hazard_type.replace('_', ' ')}, severity {severity}"
         f"{' (raised for low visibility)' if obs['visibility_m'] < T.LOW_VISIBILITY_M else ''}",
         signal=sig("NEW HAZARD", f"{hazard['id']} · severity {severity}", SEVERITY_TONE[severity])))
-    return {"observation": obs, "hazard": hazard, "is_new": True, "trace": trace}
+    return {"observation": obs, "hazard": hazard, "is_new": True, "trace": trace,
+            "messages": [msg(HAZARD_ANALYSIS, VERIFICATION, "new_hazard",
+                             f"{hazard['id']}: {hazard_type.replace('_', ' ')} at {obs['position_m']} m, "
+                             f"severity {severity}", hazard_id=hazard["id"], severity=severity)]}
 
 
 def route_after_analysis(state: AgentState) -> str:
-    if state["hazard"] is None:
-        return "update_memory"
-    return "retrieve_history" if state["is_new"] else "verify"
+    return "update_memory" if state["hazard"] is None else "verify"
 
 
 # ---------- Agent 4 (part 1): Research & Memory - retrieve history ----------
@@ -182,7 +230,10 @@ def route_after_analysis(state: AgentState) -> str:
 def retrieve_history(state: AgentState) -> dict:
     obs, hazard = state["observation"], dict(state["hazard"])
     query = query_text(obs["hazard_type"], obs["weather"], obs["description"])
-    retrieved = T.retrieve_similar_incidents(query, hazard_type=obs["hazard_type"], k=3)
+    try:
+        retrieved = call_tool("retrieve_similar_incidents", query, hazard_type=obs["hazard_type"], k=3)
+    except ToolError as exc:
+        return _history_failover(hazard, str(exc))
     trace = [step(
         RESEARCH_MEMORY, "retrieve",
         "Have similar hazards happened before, and were those reports real?",
@@ -195,7 +246,7 @@ def retrieve_history(state: AgentState) -> dict:
 
     own = memory.segment_history_count(obs["segment"])
     if own < T.COLD_START_INCIDENTS:
-        delta, notes = T.history_adjustment(retrieved)
+        delta, notes = call_tool("history_adjustment", retrieved)
         source = "rag"
         reason = (f"RAG history (cold start, {obs['segment']} has {own} past incident(s)): "
                   f"{'; '.join(notes) or 'none'} => {delta:+.2f}")
@@ -205,7 +256,7 @@ def retrieve_history(state: AgentState) -> dict:
     else:
         local = [i for i in memory.incidents()
                  if i["segment"] == obs["segment"] and i["hazard_type"] == obs["hazard_type"]]
-        delta, notes = T.history_adjustment(local)
+        delta, notes = call_tool("history_adjustment", local)
         source = "segment"
         reason = (f"Segment history ({obs['segment']}, exact lookup): "
                   f"{'; '.join(notes) or 'no past ' + obs['hazard_type'].replace('_', ' ') + ' here'}"
@@ -227,21 +278,60 @@ def retrieve_history(state: AgentState) -> dict:
         + [{"id": i["id"], "score": i["score"], "outcome": i["outcome"], "used_for": "context"}
            for i in retrieved if i["id"] not in used_ids])
     hazard["retrieval_delta"] = delta
+    reply = msg(RESEARCH_MEMORY, VERIFICATION, "history_reply",
+                f"{hazard['id']}: history adjustment {delta:+.2f} "
+                f"({'cold start, RAG' if source == 'rag' else 'own segment history'})",
+                "two_way", hazard_id=hazard["id"], delta=delta, source=source,
+                incidents=[i["id"] for i in used])
     return {"hazard": hazard, "retrieved": retrieved, "history_delta": delta,
-            "history_reason": reason, "history_source": source, "trace": trace}
+            "history_reason": reason, "history_source": source, "history_ready": True,
+            "trace": trace, "messages": [reply]}
+
+
+def _history_failover(hazard: dict, error: str) -> dict:
+    """Retrieval failed: reply 'unavailable' so Verification scores on the rules alone."""
+    hazard["retrieval_delta"] = 0.0
+    reason = "History unavailable (retrieval failed) => +0.00"
+    trace = [step(RESEARCH_MEMORY, "retrieve", "Have similar hazards happened before?",
+                  "Semantic search of long-term memory", "retrieve_similar_incidents()",
+                  f"{error}. Failing over: no history adjustment, the confidence rules still apply.",
+                  signal=sig("RAG UNAVAILABLE", "failover · history +0.00", "serious"))]
+    reply = msg(RESEARCH_MEMORY, VERIFICATION, "history_reply",
+                f"{hazard['id']}: history unavailable, continue without it", "two_way",
+                hazard_id=hazard["id"], delta=0.0, source="unavailable", error=error)
+    return {"hazard": hazard, "retrieved": [], "history_delta": 0.0, "history_reason": reason,
+            "history_source": "unavailable", "history_ready": True, "trace": trace,
+            "messages": [reply]}
 
 
 # ---------- Agent 2: Verification ----------
 
 def verify(state: AgentState) -> dict:
     obs = state["observation"]
-    result = T.verify_hazard(state["hazard"], obs, state["is_new"],
+    if state["is_new"] and not state.get("history_ready"):
+        # Two-way: a brand-new hazard has a single report, so ask Research & Memory for history
+        # before scoring. route_after_verify sends the workflow there and back.
+        hazard = state["hazard"]
+        return {"history_requested": True, "trace": [step(
+            VERIFICATION, "verify",
+            f"{hazard['id']} is new, with only one report. Is there history that should shift the "
+            "starting confidence?",
+            "Ask the Research & Memory Agent for similar past incidents", "history_request",
+            "Request sent; waiting for the reply before scoring",
+            signal=sig("ASK HISTORY", f"→ {RESEARCH_MEMORY}", "info"))],
+            "messages": [msg(VERIFICATION, RESEARCH_MEMORY, "history_request",
+                             f"{hazard['id']}: similar past {hazard['hazard_type'].replace('_', ' ')} "
+                             f"incidents in {hazard['weather'].replace('_', ' ')}?", "two_way",
+                             hazard_id=hazard["id"])]}
+    result = call_tool("verify_hazard", state["hazard"], obs, state["is_new"],
                              state.get("history_delta", 0.0), state.get("history_reason", ""))
     hazard, decision = result["hazard"], result["decision"]
     reasons = "; ".join(r for _, r in result["changes"])
     detail = f"{reasons}. Confidence {hazard['confidence']:.2f} -> {DECISION_TEXT[decision]}"
     if result["safety_exception"]:
         detail += " (safety exception: severe hazard in low visibility always gets a caution)"
+    if result["escalation"]:
+        detail += f". Escalating to the fleet operator: {result['escalation']}"
     if state["is_new"] and state.get("history_source") == "rag" and state.get("history_delta"):
         detail += (f". Without retrieval the score would be {T.FIRST_REPORT:.2f} "
                    f"({DECISION_TEXT[decision_for(T.FIRST_REPORT)]})")
@@ -253,7 +343,21 @@ def verify(state: AgentState) -> dict:
                   detail, hazard["confidence"],
                   signal=sig(label, f"start {hazard['confidence']:.2f}" if state["is_new"]
                              else f"{before:.2f} → {hazard['confidence']:.2f}", tone))]
-    return {"hazard": hazard, "decision": decision, "trace": trace}
+    handoff = msg(VERIFICATION, ALERT, "decision",
+                  f"{hazard['id']}: {DECISION_TEXT[decision]} at confidence {hazard['confidence']:.2f}",
+                  hazard_id=hazard["id"], decision=decision, confidence=hazard["confidence"])
+    messages = [handoff]
+    if result["escalation"]:
+        messages.append(msg(VERIFICATION, ALERT, "escalate", f"{hazard['id']}: {result['escalation']}",
+                            hazard_id=hazard["id"]))
+    return {"hazard": hazard, "decision": decision, "trace": trace, "messages": messages,
+            "escalation": result["escalation"]}
+
+
+def route_after_verify(state: AgentState) -> str:
+    if state.get("history_requested") and not state.get("history_ready"):
+        return "retrieve_history"
+    return "alert"
 
 
 # ---------- Agent 3: Alert ----------
@@ -276,7 +380,7 @@ def alert(state: AgentState) -> dict:
                                      or "nobody")))
     else:
         reporters = hazard["confirming_vehicles"] + hazard["clear_vehicles"] + [obs["vehicle_id"]]
-        targets = T.find_approaching_vehicles(hazard, exclude=reporters)
+        targets = call_tool("find_approaching_vehicles", hazard, exclude=reporters)
         level = ALERT_LEVEL[decision]
         others = [v for v in memory.vehicles() if v["segment"] == hazard["segment"]
                   and v["id"] not in reporters and v["id"] not in {t["vehicle"]["id"] for t in targets}]
@@ -299,7 +403,17 @@ def alert(state: AgentState) -> dict:
         vid = target["vehicle"]["id"]
         if (vid, level) in already:
             continue
-        sent.append(T.send_mock_alert(hazard, vid, level, target["distance_m"], target["eta_s"], obs["t"]))
+        sent.append(call_tool("send_mock_alert", hazard, vid, level, target["distance_m"],
+                              target["eta_s"], obs["t"]))
+    escalated = None
+    if state.get("escalation") and (T.OPERATOR_ID, "escalation") not in already:
+        escalated = call_tool("send_mock_alert", hazard, T.OPERATOR_ID, "escalation", None, None, obs["t"])
+        trace.append(step(ALERT, "alert",
+                          "Vehicles keep disagreeing and more observation requests have not settled it.",
+                          "Hand the hazard to the human fleet operator (failover)", "send_mock_alert()",
+                          f"{escalated['id']} -> {FLEET_OPERATOR}: {state['escalation']}",
+                          hazard["confidence"],
+                          signal=sig("ESCALATED →", FLEET_OPERATOR, "critical")))
     trace.append(step(
         ALERT, "alert",
         f"Decision is '{DECISION_TEXT[decision]}', so the message type is '{level.replace('_', ' ')}'.",
@@ -309,7 +423,17 @@ def alert(state: AgentState) -> dict:
         or "No new alerts needed", hazard["confidence"],
         signal=sig(f"{ALERT_SIGNAL[level][0]} →", ", ".join(car_name(a["vehicle_id"]) for a in sent),
                    ALERT_SIGNAL[level][1]) if sent else sig("NO NEW ALERTS")))
-    return {"alerts": sent, "trace": trace}
+    messages = [msg(ALERT, car_name(a["vehicle_id"]), level, a["message"],
+                    "two_way" if level == "observation_request" else "one_way",
+                    alert_id=a["id"], hazard_id=hazard["id"]) for a in sent]
+    if escalated:
+        messages.append(msg(ALERT, FLEET_OPERATOR, "escalation", escalated["message"], "two_way",
+                            alert_id=escalated["id"], hazard_id=hazard["id"]))
+        sent.append(escalated)
+    messages.append(msg(ALERT, RESEARCH_MEMORY, "alerts_sent",
+                        f"{hazard['id']}: {len(sent)} new {level.replace('_', ' ')} message(s)",
+                        hazard_id=hazard["id"], alert_ids=[a["id"] for a in sent]))
+    return {"alerts": sent, "trace": trace, "messages": messages}
 
 
 # ---------- Agent 4 (part 2): Research & Memory - update memory ----------
@@ -326,7 +450,7 @@ def update_memory(state: AgentState) -> dict:
 
     hazard = {**hazard, "report_ids": hazard["report_ids"] + [report["id"]],
               "last_report_t": obs["t"]}
-    incident = T.update_hazard_memory(hazard)
+    incident = call_tool("update_hazard_memory", hazard)
     result = (f"Saved {report['id']} and {hazard['id']} (status {hazard['status']}, confidence "
               f"{hazard['confidence']:.2f}) to short-term memory")
     if incident:
@@ -339,23 +463,24 @@ def update_memory(state: AgentState) -> dict:
                   "update_hazard_memory()", result, hazard["confidence"],
                   signal=sig("LEARNED", f"{incident['id']} · {incident['outcome'].replace('_', ' ')}", "good")
                   if incident else sig("SAVED", f"{report['id']} → {hazard['id']}"))]
-    return {"hazard": hazard, "stored_incident": incident, "trace": trace}
+    messages = [msg(RESEARCH_MEMORY, "Long-term memory", "lesson_learned",
+                    f"{incident['id']}: {incident['lesson']}", incident_id=incident["id"],
+                    outcome=incident["outcome"])] if incident else []
+    return {"hazard": hazard, "stored_incident": incident, "trace": trace, "messages": messages}
 
 
 # ---------- Graph ----------
 
-def build_graph():
+def build_graph(wrap=lambda name, fn: fn):
+    """The production coordination graph. `wrap` lets the benchmark instrument each node."""
     g = StateGraph(AgentState)
-    g.add_node("hazard_analysis", hazard_analysis)
-    g.add_node("retrieve_history", retrieve_history)
-    g.add_node("verify", verify)
-    g.add_node("alert", alert)
-    g.add_node("update_memory", update_memory)
+    for name, fn in (("hazard_analysis", hazard_analysis), ("retrieve_history", retrieve_history),
+                     ("verify", verify), ("alert", alert), ("update_memory", update_memory)):
+        g.add_node(name, wrap(name, fn))
     g.set_entry_point("hazard_analysis")
-    g.add_conditional_edges("hazard_analysis", route_after_analysis,
-                            ["retrieve_history", "verify", "update_memory"])
-    g.add_edge("retrieve_history", "verify")
-    g.add_edge("verify", "alert")
+    g.add_conditional_edges("hazard_analysis", route_after_analysis, ["verify", "update_memory"])
+    g.add_conditional_edges("verify", route_after_verify, ["retrieve_history", "alert"])
+    g.add_edge("retrieve_history", "verify")      # the history reply returns to Verification
     g.add_edge("alert", "update_memory")
     g.add_edge("update_memory", END)
     return g.compile()
@@ -364,13 +489,15 @@ def build_graph():
 GRAPH = build_graph()
 
 
-def process_report(report: dict) -> dict:
-    """Run one vehicle report through the agent workflow and persist its trace."""
+def process_report(report: dict, graph=None) -> dict:
+    """Run one vehicle report through the agent workflow and persist its trace and messages."""
     run_number = len({t["run_id"] for t in memory.traces()}) + 1
     run_id = f"RUN-{run_number:03d}"
-    final = GRAPH.invoke({"report": report, "trace": []})
+    final = (graph or GRAPH).invoke({"report": report, "trace": [], "messages": []})
     for i, entry in enumerate(final["trace"], start=1):
         memory.add_trace({**entry, "run_id": run_id, "step": i, "t": report.get("t", 0)})
+    for i, entry in enumerate(final["messages"], start=1):
+        memory.add_message({**entry, "run_id": run_id, "seq": i, "t": report.get("t", 0)})
     hazard = final.get("hazard")
     return {
         "run_id": run_id,
@@ -379,4 +506,5 @@ def process_report(report: dict) -> dict:
         "alerts": final.get("alerts", []),
         "stored_incident": final.get("stored_incident"),
         "trace": [{**e, "step": i} for i, e in enumerate(final["trace"], start=1)],
+        "messages": [{**m, "seq": i} for i, m in enumerate(final["messages"], start=1)],
     }

@@ -78,6 +78,8 @@ def _cite_incident(a: Answer, i: dict) -> str:
 
 
 def _name(vehicle_id: str) -> str:
+    if vehicle_id == T.OPERATOR_ID:
+        return "Fleet operator"
     v = memory.get_vehicle(vehicle_id)
     return v["name"] if v else vehicle_id
 
@@ -106,7 +108,8 @@ def _confidence_story(a: Answer, h: dict) -> None:
 
 
 LEVEL = {"verified": "VERIFIED ALERT", "caution": "CAUTION ADVISORY",
-         "observation_request": "LOOK REQUEST", "all_clear": "ALL CLEAR"}
+         "observation_request": "LOOK REQUEST", "all_clear": "ALL CLEAR",
+         "escalation": "OPERATOR ESCALATION"}
 
 
 # ---------- Intent handlers (one headline line + a few fact bullets) ----------
@@ -186,6 +189,29 @@ def resolution(a: Answer, h: dict) -> None:
             f"{_name(x['vehicle_id'])} {a.cite(x['id'], 'alert', x['message'])}" for x in all_clear))
 
 
+def escalation(a: Answer, h: dict | None) -> None:
+    sent = [x for x in memory.alerts() if x["level"] == "escalation"
+            and (h is None or x["hazard_id"] == h["id"])]
+    if not sent:
+        a.say("No hazard has been escalated to the fleet operator.")
+        a.say(f"- A hazard is escalated when at least 2 vehicles confirm it, another reports the road "
+              f"clear, and the conflict lasts {T.ESCALATE_AFTER_S} s without being settled")
+        return
+    for x in sent:
+        hz = memory.get_hazard(x["hazard_id"])
+        a.say(f"{_cite_hazard(a, hz)} was escalated to the fleet operator "
+              f"{a.cite(x['id'], 'alert', x['message'])} because vehicles kept disagreeing.")
+        reports = T.get_vehicle_reports(hz["id"])
+        a.tools.append(f"get_vehicle_reports({hz['id']})")
+        seen = [r for r in reports if r["hazard_type"] != "road_clear"]
+        clear = [r for r in reports if r["hazard_type"] == "road_clear"]
+        a.say("- Saw the hazard: " + ", ".join(f"{_name(r['vehicle_id'])} {_cite_report(a, r)}" for r in seen))
+        a.say("- Reported clear: " + (", ".join(f"{_name(r['vehicle_id'])} {_cite_report(a, r)}"
+                                               for r in clear) or "none"))
+        a.say(f"- Confidence at escalation {x['confidence']:.2f} (status now {hz['status']}); the agents "
+              f"stopped requesting observations after {T.ESCALATE_AFTER_S} s of conflict and handed over")
+
+
 def similar(a: Answer, question: str, h: dict | None) -> None:
     if h:
         query = f"{_fmt_type(h['hazard_type'])} {h['weather'].replace('_', ' ')} {h['description']}"
@@ -258,7 +284,10 @@ def rule_based_ask(question: str) -> dict:
     vehicle = _vehicle_from(question)
     hazard = _target_hazard(question, vehicle)
 
-    if "why" in q and ("alert" in q or "warn" in q):
+    if "escalat" in q or "operator" in q:
+        a = Answer("escalation")
+        escalation(a, hazard if "hz-" in q else None)
+    elif "why" in q and ("alert" in q or "warn" in q):
         a = Answer("explain_alert")
         explain_alert(a, vehicle, hazard)
     elif "how many" in q and hazard:

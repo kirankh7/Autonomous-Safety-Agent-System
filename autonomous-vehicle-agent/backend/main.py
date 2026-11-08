@@ -13,9 +13,9 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
-from backend import database, llm, memory, research, simulation  # noqa: E402
+from backend import database, llm, memory, playground, research, simulation  # noqa: E402
 from backend import tools as T  # noqa: E402
-from backend.agents import AGENTS, process_report  # noqa: E402
+from backend.agents import AGENTS, GRAPH, process_report  # noqa: E402
 from backend.rag import index as rag_index  # noqa: E402
 
 app = FastAPI(title="AV Intercommunication Safety Agent")
@@ -35,6 +35,24 @@ class ReportIn(BaseModel):
     sensors: list[str] = []
     description: str = ""
     t: float = 0
+
+
+class PlaygroundReportIn(BaseModel):
+    vehicle_id: str
+    hazard: str
+    distance: float
+    weather: str = "clear"
+    visibility: float = 10000
+    sensors: list[str] | None = None
+    description: str = ""
+    t: float | None = None      # default: the simulated clock (30 s after the last report)
+
+
+class MoveIn(BaseModel):
+    segment: str
+    direction: str = "forward"
+    position_m: float
+    speed_kmh: float | None = None
 
 
 class QuestionIn(BaseModel):
@@ -125,6 +143,74 @@ def get_trace():
     for entry in memory.traces():
         runs.setdefault(entry["run_id"], []).append(entry)
     return [{"run_id": rid, "steps": steps} for rid, steps in runs.items()]
+
+
+@app.get("/api/playground/options")
+def playground_options():
+    return playground.options()
+
+
+@app.post("/api/playground/report")
+def playground_report(report: PlaygroundReportIn):
+    vehicle = memory.get_vehicle(report.vehicle_id)
+    if not vehicle:
+        raise HTTPException(404, f"Unknown vehicle {report.vehicle_id}")
+    body = report.model_dump()
+    body["sensors"] = body["sensors"] if body["sensors"] is not None else vehicle["sensors"]
+    return playground.submit(body)
+
+
+@app.post("/api/playground/random")
+def playground_random(count: int = 1, seed: int | None = None):
+    """Generate random dummy reports (new hazards, confirmations, clear reports)."""
+    return playground.generate(count, seed)
+
+
+@app.post("/api/playground/reset")
+def playground_reset():
+    """Clear short-term memory (hazards, alerts, traces) and put vehicles back at the start."""
+    simulation.state.update(scenario_id=None, index=0, log=[])
+    database.reset_short_term()
+    return {"ok": True}
+
+
+@app.post("/api/vehicles/{vehicle_id}/move")
+def move_vehicle(vehicle_id: str, move: MoveIn):
+    if not memory.get_vehicle(vehicle_id):
+        raise HTTPException(404, f"Unknown vehicle {vehicle_id}")
+    if move.segment not in T.ROADS or move.direction not in ("forward", "reverse"):
+        raise HTTPException(400, "Unknown road segment or direction")
+    position = max(0.0, min(move.position_m, T.ROADS[move.segment]["length_m"]))
+    changes = {"segment": move.segment, "direction": move.direction, "position_m": round(position)}
+    if move.speed_kmh is not None:
+        changes["speed_kmh"] = move.speed_kmh
+    memory.update_vehicle(vehicle_id, **changes)
+    return _with_location(memory.get_vehicle(vehicle_id))
+
+
+@app.get("/api/graph")
+def get_graph():
+    """The compiled LangGraph as a Mermaid diagram (as the lab draws it with get_graph())."""
+    return {"mermaid": GRAPH.get_graph().draw_mermaid()}
+
+
+@app.get("/api/messages")
+def get_messages(run_id: str | None = None):
+    """Typed inter-agent messages (one-way handoffs and two-way requests/replies)."""
+    return memory.messages(run_id)
+
+
+@app.get("/api/tools")
+def get_tools():
+    """The MCP-style tool registry the agents call through, with call counts."""
+    return [{**t, "calls": T.TOOL_CALLS[t["name"]]} for t in T.tool_catalog()]
+
+
+@app.post("/api/benchmark")
+def run_benchmark():
+    """Run the five scenarios under each coordination configuration (temporary database)."""
+    from backend import benchmark
+    return benchmark.run()
 
 
 @app.get("/api/incidents")

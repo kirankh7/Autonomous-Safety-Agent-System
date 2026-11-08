@@ -43,10 +43,14 @@ CREATE TABLE IF NOT EXISTS trace (
     id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT, step INTEGER, agent TEXT, stage TEXT,
     thought TEXT, action TEXT, tool TEXT, result TEXT, confidence REAL, t REAL, signal TEXT
 );
+CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT, seq INTEGER, sender TEXT, receiver TEXT,
+    kind TEXT, protocol TEXT, content TEXT, payload TEXT, t REAL
+);
 """
 
 JSON_FIELDS = {"sensors", "report_ids", "confirming_vehicles", "clear_vehicles",
-               "confidence_history", "retrieved_incidents", "signal"}
+               "confidence_history", "retrieved_incidents", "signal", "payload"}
 
 
 def connect() -> sqlite3.Connection:
@@ -112,7 +116,7 @@ def load_json(name: str) -> dict:
 
 def reset_short_term() -> None:
     """Clear short-term memory (active scenario state) and reload vehicle positions."""
-    for table in ("reports", "hazards", "alerts", "trace", "vehicles"):
+    for table in ("reports", "hazards", "alerts", "trace", "messages", "vehicles"):
         db().execute(f"DELETE FROM {table}")
     db().commit()
     for v in load_json("vehicles.json")["vehicles"]:

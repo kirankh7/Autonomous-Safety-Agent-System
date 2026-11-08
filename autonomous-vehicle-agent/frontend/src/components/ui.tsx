@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, CircleDashed, Eye, Info } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDashed, Eye, Info, UserRound } from "lucide-react";
 
 // Status colours carry meaning (danger level) and are always shown with an icon + label.
 export const STATUS = {
@@ -47,8 +47,14 @@ export function alertStatus(level: string): StatusInfo {
     caution: { color: STATUS.warning, label: "Caution", Icon: Info },
     observation_request: { color: STATUS.serious, label: "Observation request", Icon: Eye },
     all_clear: { color: STATUS.good, label: "All clear", Icon: CheckCircle2 },
+    escalation: { color: STATUS.critical, label: "Operator escalation", Icon: UserRound },
   }[level] ?? { color: STATUS.muted, label: level, Icon: Info };
 }
+
+/** Escalations go to the human fleet operator, not to a vehicle. */
+export const OPERATOR_ID = "OPERATOR";
+export const recipientName = (id: string, names: Record<string, string>) =>
+  id === OPERATOR_ID ? "Fleet operator" : names[id] ?? id;
 
 export const fmtType = (t: string) => t.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 

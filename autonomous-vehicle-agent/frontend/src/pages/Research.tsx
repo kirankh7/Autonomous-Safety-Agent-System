@@ -23,7 +23,7 @@ export default function Research({ messages, setMessages, mode }: {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => end.current?.scrollIntoView({ behavior: "smooth" }), [messages.length]);
+  useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [messages.length]);
 
   async function ask(question: string) {
     if (!question.trim() || busy) return;

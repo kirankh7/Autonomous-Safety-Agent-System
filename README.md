@@ -1,6 +1,7 @@
 # Capstone Project: Autonomous Vehicle Intercommunication Safety Agent System
 
 **Author:** Kiran Haridas
+**Repository:** [github.com/kirankh7/Autonomous-Safety-Agent-System](https://github.com/kirankh7/Autonomous-Safety-Agent-System)
 **Agent Option:** Research Assistant
 
 ## Overview
@@ -77,4 +78,4 @@ The system could eventually provide a continuously updated understanding of road
 
 ## Working Prototype
 
-The working agent application (FastAPI + LangGraph backend, React dashboard) lives in [`autonomous-vehicle-agent/`](autonomous-vehicle-agent/README.md). See its README for how to run it and how to demonstrate the five hazard scenarios.
+The working agent application (FastAPI + LangGraph backend, React dashboard) lives in [`autonomous-vehicle-agent/`](autonomous-vehicle-agent/README.md) ([view on GitHub](https://github.com/kirankh7/Autonomous-Safety-Agent-System/tree/main/autonomous-vehicle-agent)). See its README for how to run it and how to demonstrate the five hazard scenarios.

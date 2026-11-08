@@ -3,6 +3,7 @@ import { CheckCircle2, CircleDot, CloudFog, MessageSquare, Play, RotateCcw, Send
 import type { AppState, LogEntry, Scenario } from "../types";
 import { api } from "../api";
 import AnswerView from "../components/AnswerView";
+import MessageLog from "../components/MessageLog";
 import FleetMap from "../components/FleetMap";
 import TraceTimeline, { AgentLegend, AgentTag } from "../components/TraceTimeline";
 import { AlertRow, SignalChip, SignalStrip } from "../components/Signals";
@@ -21,13 +22,13 @@ export default function Simulation({ state, scenarios, run, busy }: Props) {
   const [viewIndex, setViewIndex] = useState<number | null>(null);
 
   // Always jump to the newest step after "Next Step".
-  useEffect(() => setViewIndex(sim.log.length ? sim.log.length - 1 : null), [sim.log.length]);
+  useEffect(() => { setViewIndex(sim.log.length ? sim.log.length - 1 : null); }, [sim.log.length]);
   const entry: LogEntry | undefined = viewIndex !== null ? sim.log[viewIndex] : undefined;
   const hazard = state.hazards.find((h) => h.id === (entry?.hazard_id ?? sim.log.findLast((l) => l.hazard_id)?.hazard_id));
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
         {scenarios.map((s, i) => {
           const active = sim.scenario?.id === s.id;
           return (
@@ -112,7 +113,8 @@ export default function Simulation({ state, scenarios, run, busy }: Props) {
               </Panel>
             )}
             {entry?.type === "report" && (() => {
-              const verify = entry.trace?.find((t) => t.stage === "verify");
+              // A new hazard visits Verification twice (ask for history, then score): use the last.
+              const verify = entry.trace?.findLast((t) => t.stage === "verify");
               const learned = entry.trace?.find((t) => t.signal?.label === "LEARNED");
               const prev = sim.log.slice(0, entry.index).reverse()
                 .find((l) => l.type === "report" && l.hazard_id === entry.hazard_id)?.confidence;
@@ -159,6 +161,9 @@ export default function Simulation({ state, scenarios, run, busy }: Props) {
                         ? entry.alerts.map((a) => <AlertRow key={a.id} alert={a} name={names[a.vehicle_id] ?? a.vehicle_id} />)
                         : <span className="text-xs text-muted">None at this step</span>}
                     </div>
+                  </Panel>
+                  <Panel title="Agent messages" action={<span className="text-xs text-muted">one-way handoffs · two-way request/reply</span>}>
+                    <MessageLog messages={entry.messages ?? []} />
                   </Panel>
                   <Panel title="Agent trace" action={<span className="text-xs text-muted">click a step for reasoning</span>}>
                     <TraceTimeline steps={entry.trace ?? []} />

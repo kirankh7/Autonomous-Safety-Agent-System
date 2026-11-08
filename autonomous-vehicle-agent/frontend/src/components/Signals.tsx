@@ -1,6 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import type { Alert, Signal, TraceStep } from "../types";
-import { AGENT_COLORS, AGENT_NUMBER, STATUS, StatusBadge, alertStatus } from "./ui";
+import { AGENT_COLORS, AGENT_NUMBER, OPERATOR_ID, STATUS, StatusBadge, alertStatus } from "./ui";
 
 // Tone -> colour. Status tones carry meaning; "info" uses the vehicle/series blue.
 const TONE: Record<string, string> = {
@@ -46,7 +46,7 @@ export function AlertRow({ alert, name }: { alert: Alert; name: string }) {
          title={alert.message}>
       <div className="flex items-center gap-2">
         <StatusBadge info={alertStatus(alert.level)} />
-        <span className="font-semibold text-ink">{name}</span>
+        <span className="font-semibold text-ink">{alert.vehicle_id === OPERATOR_ID ? "Fleet operator" : name}</span>
       </div>
       <span className="tabular text-ink-2">
         {alert.distance_m ? `${(alert.distance_m / 1000).toFixed(1)} km · ${alert.eta_s} s` : alert.id}

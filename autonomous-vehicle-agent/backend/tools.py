@@ -2,7 +2,9 @@
 
 The confidence rules here are demonstration rules for a capstone, not automotive safety standards.
 """
+import inspect
 import math
+from collections import Counter
 
 from backend import memory
 from backend.database import load_json
@@ -19,10 +21,13 @@ CAUTION_AT = 0.4
 RESOLVE_BELOW = 0.2
 CLEAR_REPORTS_TO_RESOLVE = 2
 MATCH_RADIUS_M = 50          # reports within 50 m along the road are the same hazard
+RELATED_MATCH_RADIUS_M = 150  # related lane obstructions (Checkpoint 4.1 fix) match within 150 m
 CONFIRM_WINDOW_S = 120       # a confirmation must arrive within 2 minutes of the last report
 ALERT_RANGE_M = 3000         # vehicles up to 3 km behind the hazard are "approaching"
 LOW_VISIBILITY_M = 200
 COLD_START_INCIDENTS = 3     # segments with fewer resolved incidents use RAG for history
+ESCALATE_AFTER_S = 120       # conflicting evidence for 2 minutes -> hand over to a human operator
+OPERATOR_ID = "OPERATOR"     # pseudo-recipient for escalations (the human fleet operator)
 
 # Severity and recommended action per hazard type (loosely based on public FHWA traffic
 # incident management and NWS "Turn Around Don't Drown" guidance; demonstration only).
@@ -35,6 +40,15 @@ HAZARD_TABLE = {
     "pothole":         ("low",    "Reduce speed over the affected lane."),
 }
 SEVERITY_LEVELS = ["low", "medium", "high", "critical"]
+
+# Hazard types that can describe the same lane obstruction seen differently (a truck that shed its
+# load reads as "stopped truck" to one car and "debris" to the next). Checkpoint 4.1 found these
+# opened duplicate events 80 m apart; they now match within RELATED_MATCH_RADIUS_M.
+RELATED_TYPES = [{"stopped_truck", "stopped_vehicle", "debris"}]
+
+
+def related(a: str, b: str) -> bool:
+    return any(a in group and b in group for group in RELATED_TYPES)
 
 # Words a report might use for each hazard type (a tiny rule-based "understanding" step).
 SYNONYMS = {
@@ -129,15 +143,25 @@ def get_vehicle_reports(hazard_id: str) -> list[dict]:
 
 def find_matching_hazards(segment: str, direction: str, position_m: float,
                           hazard_type: str | None = None) -> list[dict]:
-    """Tool: active hazards on the same segment and carriageway within MATCH_RADIUS_M.
-    hazard_type=None matches any type (used for road-clear reports)."""
+    """Tool: active hazards on the same segment and carriageway within MATCH_RADIUS_M, or within
+    RELATED_MATCH_RADIUS_M for a related obstruction type. hazard_type=None matches any type
+    (used for road-clear reports)."""
     matches = []
     for h in memory.active_hazards():
-        same_place = (h["segment"] == segment and h["direction"] == direction
-                      and abs(h["position_m"] - position_m) <= MATCH_RADIUS_M)
-        if same_place and (hazard_type is None or h["hazard_type"] == hazard_type):
+        if h["segment"] != segment or h["direction"] != direction:
+            continue
+        gap = abs(h["position_m"] - position_m)
+        if hazard_type is None or h["hazard_type"] == hazard_type:
+            radius = MATCH_RADIUS_M
+        elif related(h["hazard_type"], hazard_type):
+            radius = RELATED_MATCH_RADIUS_M
+        else:
+            continue
+        if gap <= radius:
             matches.append(h)
-    return sorted(matches, key=lambda h: abs(h["position_m"] - position_m))
+    # Prefer an exact type match, then the nearest event.
+    return sorted(matches, key=lambda h: (h["hazard_type"] != hazard_type and hazard_type is not None,
+                                          abs(h["position_m"] - position_m)))
 
 
 def retrieve_similar_incidents(query: str, hazard_type: str | None = None, k: int = 3,
@@ -222,7 +246,25 @@ def verify_hazard(hazard: dict, report: dict, is_new: bool, history_delta: float
     h["decision"] = decision
     if decision == "resolved":
         h["status"] = "resolved"
-    return {"hazard": h, "changes": changes, "decision": decision, "safety_exception": exception}
+    return {"hazard": h, "changes": changes, "decision": decision, "safety_exception": exception,
+            "escalation": conflict_escalation(h, t, decision)}
+
+
+def conflict_escalation(hazard: dict, t: float, decision: str) -> str | None:
+    """Failover to a human (Checkpoint 4.1; the lab's "max retries -> failover" pattern).
+
+    The agents' own loop for doubt is: request observations, score the next report, repeat. If at
+    least two vehicles have confirmed the hazard and at least one says the road is clear, and that
+    disagreement has lasted ESCALATE_AFTER_S without the loop settling it, stop retrying and hand the
+    event to the fleet operator. Returns the reason, or None."""
+    if decision in ("resolved", "verified") or len(hazard["confirming_vehicles"]) < 2:
+        return None
+    clears = [c["t"] for c in hazard["confidence_history"] if c["delta"] == ROAD_CLEAR]
+    if not clears or t - clears[0] < ESCALATE_AFTER_S:
+        return None
+    return (f"{len(hazard['confirming_vehicles'])} vehicles confirmed and "
+            f"{len(hazard['clear_vehicles'])} reported clear; the conflict has lasted "
+            f"{int(t - clears[0])} s (limit {ESCALATE_AFTER_S} s) at confidence {hazard['confidence']:.2f}")
 
 
 def find_approaching_vehicles(hazard: dict, exclude: list[str] | None = None) -> list[dict]:
@@ -246,6 +288,8 @@ ALERT_TEMPLATES = {
     "observation_request": "OBSERVATION REQUEST: unconfirmed {type} reported {dist} m ahead on "
                            "{road} {dir}. Please report what your sensors see.",
     "all_clear": "ALL CLEAR: the {type} on {road} {dir} has been cleared.",
+    "escalation": "OPERATOR ESCALATION: {id} ({type} on {road} {dir}) has conflicting reports; "
+                  "confidence {conf:.2f}. Please review sensor feeds and confirm or clear it.",
 }
 
 
@@ -255,7 +299,8 @@ def send_mock_alert(hazard: dict, vehicle_id: str, level: str, distance_m: float
     message = ALERT_TEMPLATES[level].format(
         type=hazard["hazard_type"].replace("_", " "), dist=round(distance_m or 0),
         road=road_name(hazard["segment"]), dir=direction_label(hazard["segment"], hazard["direction"]).lower(),
-        sev=hazard["severity"], action=hazard["recommended_action"], conf=hazard["confidence"])
+        sev=hazard["severity"], action=hazard["recommended_action"], conf=hazard["confidence"],
+        id=hazard["id"])
     lat, lng = point_at(hazard["segment"], hazard["position_m"])
     return memory.save_alert({
         "hazard_id": hazard["id"], "vehicle_id": vehicle_id, "level": level, "message": message,
@@ -273,3 +318,40 @@ def update_hazard_memory(hazard: dict) -> dict | None:
     incident = memory.store_incident(hazard)
     rag_index.build()
     return incident
+
+
+# ---------- MCP-style tool interface ----------
+# Agents call tools by name through one standard entry point instead of importing functions
+# directly (the "MCP-style adapter" from the Module 5 lab). The registry validates arguments
+# before the call, wraps failures in ToolError so the calling agent can fail over, and counts
+# calls so the coordination benchmark can measure overhead.
+
+TOOLS = {f.__name__: f for f in (
+    get_vehicle_reports, find_matching_hazards, retrieve_similar_incidents, history_adjustment,
+    verify_hazard, find_approaching_vehicles, send_mock_alert, update_hazard_memory)}
+TOOL_CALLS: Counter = Counter()
+
+
+class ToolError(RuntimeError):
+    """A tool call failed (unknown tool, bad arguments, or an error inside the tool)."""
+
+
+def call_tool(name: str, *args, **kwargs):
+    tool = TOOLS.get(name)
+    if tool is None:
+        raise ToolError(f"Unknown tool '{name}'. Available: {', '.join(sorted(TOOLS))}")
+    try:
+        inspect.signature(tool).bind(*args, **kwargs)
+    except TypeError as exc:
+        raise ToolError(f"Invalid arguments for {name}: {exc}") from exc
+    TOOL_CALLS[name] += 1
+    try:
+        return tool(*args, **kwargs)
+    except Exception as exc:  # surfaced to the agent, which decides how to fail over
+        raise ToolError(f"{name} failed: {exc}") from exc
+
+
+def tool_catalog() -> list[dict]:
+    """Name, signature and first docstring line of every registered tool (served by the API)."""
+    return [{"name": n, "signature": f"{n}{inspect.signature(f)}",
+             "description": (f.__doc__ or "").strip().splitlines()[0]} for n, f in TOOLS.items()]

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Activity, Bot, FlaskConical, LayoutDashboard, Map, ShieldAlert } from "lucide-react";
+import { Activity, Bot, ExternalLink, FlaskConical, Gamepad2, LayoutDashboard, Map, ShieldAlert } from "lucide-react";
 import type { AppState, ChatMessage, Run, Scenario } from "./types";
 import { api } from "./api";
 import Dashboard from "./pages/Dashboard";
@@ -7,11 +7,13 @@ import MapPage from "./pages/MapPage";
 import Simulation from "./pages/Simulation";
 import AgentActivity from "./pages/AgentActivity";
 import Research from "./pages/Research";
+import Playground from "./pages/Playground";
 
 const PAGES = [
   { key: "dashboard", label: "Fleet Dashboard", Icon: LayoutDashboard },
   { key: "map", label: "Vehicle Map", Icon: Map },
   { key: "simulation", label: "Hazard Simulation", Icon: FlaskConical },
+  { key: "playground", label: "Playground", Icon: Gamepad2 },
   { key: "activity", label: "Agent Activity", Icon: Activity },
   { key: "research", label: "Research Assistant", Icon: Bot },
 ];
@@ -82,6 +84,10 @@ export default function App() {
           <div>Simulated data only. Alerts are advisory and never control vehicles.</div>
           {state && <div>LLM: {state.config.llm_provider}<br />Vector DB: {state.config.vector_db}</div>}
           <div>CMU Agentic AI capstone - Kiran Haridas</div>
+          <a href="https://github.com/kirankh7/Autonomous-Safety-Agent-System" target="_blank" rel="noreferrer"
+             className="inline-flex items-center gap-1 text-s1 hover:underline">
+            Source code on GitHub <ExternalLink size={11} />
+          </a>
         </div>
       </aside>
 
@@ -106,6 +112,7 @@ export default function App() {
               {page === "dashboard" && <Dashboard state={state} runs={runs} go={setPage} />}
               {page === "map" && <MapPage state={state} />}
               {page === "simulation" && <Simulation state={state} scenarios={scenarios} run={run} busy={busy} />}
+              {page === "playground" && <Playground state={state} run={run} busy={busy} />}
               {page === "activity" && <AgentActivity runs={runs} agents={state.agents} names={Object.fromEntries(state.vehicles.map((v) => [v.id, v.name]))} />}
               {page === "research" && <Research messages={messages} setMessages={setMessages} mode={state.config.llm_provider} />}
             </>

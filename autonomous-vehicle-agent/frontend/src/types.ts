@@ -64,7 +64,7 @@ export interface Alert {
   id: string;
   hazard_id: string;
   vehicle_id: string;
-  level: "verified" | "caution" | "observation_request" | "all_clear";
+  level: "verified" | "caution" | "observation_request" | "all_clear" | "escalation";
   message: string;
   hazard_type: string;
   severity: string;
@@ -98,6 +98,69 @@ export interface Run {
   steps: TraceStep[];
 }
 
+/** A typed message between agents (or from an agent to a vehicle). */
+export interface AgentMessage {
+  run_id?: string;
+  seq: number;
+  sender: string;
+  receiver: string;
+  kind: string;
+  protocol: "one_way" | "two_way";
+  content: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface BenchmarkRow {
+  config: string;
+  description: string;
+  reports: number;
+  node_calls: number;
+  tool_calls: number;
+  retrieval_calls: number;
+  messages: number;
+  two_way_messages: number;
+  mean_latency_ms: number;
+  verified_alerts: number;
+  false_alerts: number;
+  false_warnings: number;
+  escalations: number;
+  warned_vehicles: number;
+  decisions_match_hybrid: string;
+}
+
+export interface PlaygroundOptions {
+  hazard_types: string[];
+  weather: { id: string; visibility_m: number }[];
+  roads: { id: string; name: string; length_m: number; forward_label: string; reverse_label: string }[];
+}
+
+export interface PlaygroundReport {
+  vehicle_id: string;
+  hazard: string;
+  distance: number;
+  weather: string;
+  visibility: number;
+  description: string;
+}
+
+/** One processed report, as returned by the playground endpoints. */
+export interface RunResult {
+  run_id: string;
+  hazard: Hazard | null;
+  decision: string | null;
+  alerts: Alert[];
+  stored_incident: { id: string; outcome: string } | null;
+  trace: TraceStep[];
+  messages: AgentMessage[];
+  report?: PlaygroundReport & { t: number };
+  narration?: string;
+}
+
+export interface BenchmarkResult {
+  summary: BenchmarkRow[];
+  vector_db: string;
+}
+
 export interface Evidence {
   id: string;
   kind: string;
@@ -127,6 +190,7 @@ export interface LogEntry {
   alerts?: Alert[];
   stored_incident?: { id: string; outcome: string } | null;
   trace?: TraceStep[];
+  messages?: AgentMessage[];
   question?: string;
   answer?: ResearchAnswer;
 }

@@ -94,6 +94,21 @@ def traces() -> list[dict]:
     return dbm.query("SELECT * FROM trace ORDER BY id")
 
 
+def add_message(entry: dict) -> None:
+    cols = ("run_id", "seq", "sender", "receiver", "kind", "protocol", "content", "payload", "t")
+    dbm.db().execute(
+        f"INSERT INTO messages ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)})",
+        [json.dumps(entry.get(c) or {}) if c == "payload" else entry.get(c) for c in cols],
+    )
+    dbm.db().commit()
+
+
+def messages(run_id: str | None = None) -> list[dict]:
+    if run_id:
+        return dbm.query("SELECT * FROM messages WHERE run_id = ? ORDER BY id", (run_id,))
+    return dbm.query("SELECT * FROM messages ORDER BY id")
+
+
 def expire_stale(now_t: float) -> list[str]:
     """Mark active hazards with no reports for EXPIRY_S seconds as expired."""
     expired = []

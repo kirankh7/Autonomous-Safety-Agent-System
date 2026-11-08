@@ -511,6 +511,330 @@
           "question": "What has long-term memory learned from feedback?"
         }
       ]
+    },
+    {
+      "id": "conflicting_reports",
+      "title": "Conflicting reports",
+      "summary": "A truck sheds debris in fog, then vehicles disagree. The agents keep a caution up, and after 2 minutes of conflict they escalate to the fleet operator.",
+      "weather": "fog",
+      "visibility_m": 150,
+      "setup": {
+        "CAR-001": {
+          "segment": "ROAD-01",
+          "direction": "forward",
+          "position_m": 3000,
+          "speed_kmh": 85
+        },
+        "CAR-002": {
+          "segment": "ROAD-01",
+          "direction": "forward",
+          "position_m": 3050,
+          "speed_kmh": 80
+        },
+        "CAR-003": {
+          "segment": "ROAD-01",
+          "direction": "forward",
+          "position_m": 2400,
+          "speed_kmh": 90
+        },
+        "CAR-004": {
+          "segment": "ROAD-01",
+          "direction": "reverse",
+          "position_m": 4300,
+          "speed_kmh": 95
+        }
+      },
+      "steps": [
+        {
+          "type": "report",
+          "t": 0,
+          "narration": "Tesla Model 3 reports a stopped truck in fog",
+          "report": {
+            "vehicle_id": "CAR-001",
+            "hazard": "stopped_truck",
+            "road_segment": "ROAD-01",
+            "distance": 500,
+            "weather": "fog",
+            "visibility": 150,
+            "sensors": [
+              "camera",
+              "lidar",
+              "radar"
+            ],
+            "description": "Stopped truck in the right lane, hazard lights on"
+          }
+        },
+        {
+          "type": "report",
+          "t": 40,
+          "narration": "Toyota Prius reports debris 80 m further on (a related obstruction, so the same hazard)",
+          "report": {
+            "vehicle_id": "CAR-002",
+            "hazard": "debris",
+            "road_segment": "ROAD-01",
+            "distance": 530,
+            "weather": "fog",
+            "visibility": 150,
+            "sensors": [
+              "camera",
+              "lidar",
+              "radar"
+            ],
+            "description": "Load spilled from a truck across the right lane"
+          }
+        },
+        {
+          "type": "report",
+          "t": 200,
+          "narration": "Volvo Truck passes the spot and reports the road clear",
+          "report": {
+            "vehicle_id": "CAR-006",
+            "hazard": "road_clear",
+            "road_segment": "ROAD-01",
+            "distance": 60,
+            "weather": "fog",
+            "visibility": 150,
+            "sensors": [
+              "camera",
+              "radar"
+            ],
+            "description": "Right lane looks clear through the fog"
+          },
+          "move": {
+            "CAR-006": {
+              "segment": "ROAD-01",
+              "direction": "forward",
+              "position_m": 3480,
+              "speed_kmh": 80
+            }
+          }
+        },
+        {
+          "type": "report",
+          "t": 340,
+          "narration": "Hyundai Ioniq 5 sees the truck again, 140 s after the clear report: still conflicting",
+          "report": {
+            "vehicle_id": "CAR-007",
+            "hazard": "stopped_truck",
+            "road_segment": "ROAD-01",
+            "distance": 110,
+            "weather": "fog",
+            "visibility": 150,
+            "sensors": [
+              "camera",
+              "lidar",
+              "radar"
+            ],
+            "description": "Truck on the shoulder, partly in the right lane"
+          },
+          "move": {
+            "CAR-007": {
+              "segment": "ROAD-01",
+              "direction": "forward",
+              "position_m": 3400,
+              "speed_kmh": 70
+            }
+          }
+        },
+        {
+          "type": "question",
+          "narration": "Ask: why was the hazard escalated?",
+          "question": "Why was the hazard escalated to the fleet operator?"
+        },
+        {
+          "type": "report",
+          "t": 400,
+          "narration": "Jaguar I-PACE reports clear: second clear report resolves it",
+          "report": {
+            "vehicle_id": "CAR-005",
+            "hazard": "road_clear",
+            "road_segment": "ROAD-01",
+            "distance": 50,
+            "weather": "fog",
+            "visibility": 150,
+            "sensors": [
+              "camera",
+              "lidar",
+              "radar"
+            ],
+            "description": "Truck has been towed, lane open"
+          },
+          "move": {
+            "CAR-005": {
+              "segment": "ROAD-01",
+              "direction": "forward",
+              "position_m": 3450,
+              "speed_kmh": 75
+            }
+          }
+        },
+        {
+          "type": "question",
+          "narration": "Ask: why was the hazard resolved?",
+          "question": "Why was the hazard resolved?"
+        }
+      ]
+    },
+    {
+      "id": "two_hazards",
+      "title": "Two hazards at once",
+      "summary": "A pothole on Dublin Blvd and a stopped vehicle on I-680 at the same time. Each is tracked, verified and alerted separately, and the opposite carriageway stays separate.",
+      "weather": "rain",
+      "visibility_m": 2500,
+      "setup": {
+        "CAR-003": {
+          "segment": "ROAD-03",
+          "direction": "forward",
+          "position_m": 600,
+          "speed_kmh": 55
+        },
+        "CAR-002": {
+          "segment": "ROAD-03",
+          "direction": "forward",
+          "position_m": 300,
+          "speed_kmh": 50
+        },
+        "CAR-006": {
+          "segment": "ROAD-03",
+          "direction": "forward",
+          "position_m": 100,
+          "speed_kmh": 45
+        },
+        "CAR-004": {
+          "segment": "ROAD-02",
+          "direction": "forward",
+          "position_m": 1500,
+          "speed_kmh": 90
+        },
+        "CAR-001": {
+          "segment": "ROAD-02",
+          "direction": "forward",
+          "position_m": 800,
+          "speed_kmh": 95
+        },
+        "CAR-005": {
+          "segment": "ROAD-02",
+          "direction": "reverse",
+          "position_m": 3000,
+          "speed_kmh": 95
+        }
+      },
+      "steps": [
+        {
+          "type": "report",
+          "t": 0,
+          "narration": "Ford Transit reports a pothole on Dublin Blvd",
+          "report": {
+            "vehicle_id": "CAR-003",
+            "hazard": "pothole",
+            "road_segment": "ROAD-03",
+            "distance": 200,
+            "weather": "rain",
+            "visibility": 2500,
+            "sensors": [
+              "camera",
+              "radar"
+            ],
+            "description": "Deep pothole in the left lane, water filled"
+          }
+        },
+        {
+          "type": "report",
+          "t": 20,
+          "narration": "Mercedes Sprinter reports a stopped vehicle on I-680 (a second, separate hazard)",
+          "report": {
+            "vehicle_id": "CAR-004",
+            "hazard": "stopped_vehicle",
+            "road_segment": "ROAD-02",
+            "distance": 400,
+            "weather": "rain",
+            "visibility": 2500,
+            "sensors": [
+              "camera",
+              "lidar"
+            ],
+            "description": "Disabled car stopped in the right lane"
+          }
+        },
+        {
+          "type": "report",
+          "t": 60,
+          "narration": "Toyota Prius confirms the pothole",
+          "report": {
+            "vehicle_id": "CAR-002",
+            "hazard": "pothole",
+            "road_segment": "ROAD-03",
+            "distance": 160,
+            "weather": "rain",
+            "visibility": 2500,
+            "sensors": [
+              "camera",
+              "lidar",
+              "radar"
+            ],
+            "description": "Pothole in the left lane"
+          },
+          "move": {
+            "CAR-002": {
+              "segment": "ROAD-03",
+              "direction": "forward",
+              "position_m": 650,
+              "speed_kmh": 50
+            }
+          }
+        },
+        {
+          "type": "report",
+          "t": 70,
+          "narration": "Jaguar I-PACE (northbound) reports a stopped vehicle on its own side: a separate carriageway",
+          "report": {
+            "vehicle_id": "CAR-005",
+            "hazard": "stopped_vehicle",
+            "road_segment": "ROAD-02",
+            "distance": 1000,
+            "weather": "rain",
+            "visibility": 2500,
+            "sensors": [
+              "camera",
+              "lidar",
+              "radar"
+            ],
+            "description": "Car stopped on the northbound shoulder"
+          }
+        },
+        {
+          "type": "report",
+          "t": 90,
+          "narration": "Tesla Model 3 confirms the southbound stopped vehicle",
+          "report": {
+            "vehicle_id": "CAR-001",
+            "hazard": "stopped_vehicle",
+            "road_segment": "ROAD-02",
+            "distance": 210,
+            "weather": "rain",
+            "visibility": 2500,
+            "sensors": [
+              "camera",
+              "lidar",
+              "radar"
+            ],
+            "description": "Disabled car in the right lane"
+          },
+          "move": {
+            "CAR-001": {
+              "segment": "ROAD-02",
+              "direction": "forward",
+              "position_m": 1700,
+              "speed_kmh": 70
+            }
+          }
+        },
+        {
+          "type": "question",
+          "narration": "Ask: what hazards are active right now?",
+          "question": "What hazards are active right now?"
+        }
+      ]
     }
   ]
 }

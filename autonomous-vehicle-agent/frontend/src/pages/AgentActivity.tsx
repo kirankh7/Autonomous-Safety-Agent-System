@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import type { AgentInfo, Run } from "../types";
+import type { AgentInfo, AgentMessage, Run } from "../types";
+import { api } from "../api";
+import MessageLog from "../components/MessageLog";
+import CoordinationGraph from "../components/CoordinationGraph";
 import TraceTimeline, { AgentTag, Pipeline } from "../components/TraceTimeline";
 import { SignalStrip } from "../components/Signals";
 import { Panel, StatusBadge, decisionStatus } from "../components/ui";
@@ -16,16 +19,28 @@ export default function AgentActivity({ runs, names, agents }: {
     if (!runs.find((r) => r.run_id === runId)) setRunId(runs.at(-1)?.run_id ?? null);
   }, [runs, runId]);
   const current = runs.find((r) => r.run_id === runId);
+  const [messages, setMessages] = useState<AgentMessage[]>([]);
+  useEffect(() => {
+    if (!runId) return;
+    let live = true;
+    api.messages(runId).then((m) => { if (live) setMessages(m); }).catch(() => live && setMessages([]));
+    return () => { live = false; };
+  }, [runId, runs.length]);
 
   const roster = (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      {agents.map((a) => (
-        <div key={a.name} className="rounded-xl border border-hairline bg-surface p-3">
-          <AgentTag agent={a.name} />
-          <p className="mt-1.5 text-xs text-ink-2">{a.role}</p>
-        </div>
-      ))}
-    </div>
+    <>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {agents.map((a) => (
+          <div key={a.name} className="rounded-xl border border-hairline bg-surface p-3">
+            <AgentTag agent={a.name} />
+            <p className="mt-1.5 text-xs text-ink-2">{a.role}</p>
+          </div>
+        ))}
+      </div>
+      <Panel title="How the agents coordinate">
+        <CoordinationGraph />
+      </Panel>
+    </>
   );
 
   if (!runs.length) {
@@ -39,7 +54,7 @@ export default function AgentActivity({ runs, names, agents }: {
       <Panel title="Agent runs (one per report)">
         <ul className="space-y-1">
           {runs.map((r) => {
-            const verify = r.steps.find((s) => s.stage === "verify");
+            const verify = r.steps.findLast((s) => s.stage === "verify");
             const decision = verify?.result.match(/-> (verified alert|caution advisory|wait|resolve hazard)/)?.[1];
             const key = decision?.startsWith("verified") ? "verified" : decision?.startsWith("caution") ? "caution"
               : decision?.startsWith("wait") ? "wait" : decision?.startsWith("resolve") ? "resolved" : undefined;
@@ -67,6 +82,10 @@ export default function AgentActivity({ runs, names, agents }: {
           <Panel title={`Workflow for ${current.run_id}`}>
             <Pipeline steps={current.steps} selected={stage} onSelect={setStage} />
             <div className="mt-3"><SignalStrip steps={current.steps} /></div>
+          </Panel>
+          <Panel title="Agent messages"
+                 action={<span className="text-xs text-muted">one-way handoffs · two-way request/reply</span>}>
+            <MessageLog messages={messages} />
           </Panel>
           <Panel title="ReAct trace"
                  action={<button onClick={() => setDetails(!details)} className="text-xs text-s1 hover:underline">

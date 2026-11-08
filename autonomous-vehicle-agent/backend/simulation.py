@@ -49,7 +49,7 @@ def next_step() -> dict:
                      hazard_id=h["id"] if h else None,
                      confidence=h["confidence"] if h else None,
                      alerts=result["alerts"], stored_incident=result["stored_incident"],
-                     trace=result["trace"])
+                     trace=result["trace"], messages=result["messages"])
     else:
         entry.update(question=s["question"], answer=research.ask(s["question"]))
     state["log"].append(entry)
