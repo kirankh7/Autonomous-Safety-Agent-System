@@ -4,6 +4,9 @@
 **Program:** Carnegie Mellon University, Agentic AI
 **Agent option:** Research Assistant
 **Public repository:** https://github.com/kirankh7/Autonomous-Safety-Agent-System
+**Presentation video (main):** https://youtu.be/obzEvUXOvYQ
+**Elevator pitch (optional):** https://www.youtube.com/shorts/_W1MNYxP3tI
+**Slide deck:** https://github.com/kirankh7/Autonomous-Safety-Agent-System/blob/main/docs/Final-Presentation-Kiran-Haridas.pptx
 
 ## 1. Problem and Intended User
 
@@ -85,3 +88,26 @@ Test on a larger labelled scenario set, add an NLI-based groundedness check, use
 ## 11. Repository
 
 The public repository contains the README with architecture, setup and usage, the backend and dashboard code, the synthetic data, tests, the benchmark, and design documents for each stage.
+
+## 12. Presentation, Videos and Slides
+
+**Presentation video (required, 8-10 minutes):** https://youtu.be/obzEvUXOvYQ. This is a NotebookLM-generated version of the project presentation.
+
+**Summary:** The presentation explains an Autonomous Vehicle Intercommunication Safety Agent System, in which four cooperating agents verify hazard reports from a simulated fleet, warn the vehicles that need it, and learn from outcomes. It covers the hybrid LangGraph architecture and key design decisions, the evaluation results (the production design matches the most thorough setup with zero false warnings at about half the cost), the safety and human-oversight design, the limitations, and the public GitHub repository.
+
+**Elevator pitch (optional, ungraded, 90 seconds):** https://www.youtube.com/shorts/_W1MNYxP3tI
+
+**Slide deck (10 slides):** https://github.com/kirankh7/Autonomous-Safety-Agent-System/blob/main/docs/Final-Presentation-Kiran-Haridas.pptx. The deck uses screenshots of the running dashboard. Its slides are:
+
+| # | Slide | Main point |
+|---|---|---|
+| 1 | Title and problem | A shared safety layer so a vehicle can use what another vehicle sees |
+| 2 | Goal, users and scope | Early, verified, auditable warnings with few false alarms |
+| 3 | Architecture | Four agents in one LangGraph workflow, with a history loop and escalation |
+| 4 | Live demo: fog | Confidence 0.50, 0.70, 0.40, then 0.10 resolved |
+| 5 | Memory changes a decision | Retrieved history lifts a flooding report from 0.50 to 0.65 |
+| 6 | Safety and human oversight | Guardrails and escalation to the fleet operator |
+| 7 | Research Assistant | Cited, grounded answers from a local Qwen model |
+| 8 | Evaluation | Hybrid: 0 false warnings and 25/25 same decisions |
+| 9 | Design evolution and decisions | Rules decide, the LLM explains; two-tier memory; typed messages |
+| 10 | Limits, next steps and repository | Public GitHub repository with README, code and tests |
