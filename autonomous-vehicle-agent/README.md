@@ -74,7 +74,7 @@ flowchart LR
 | Agent workflow | LangGraph (`backend/agents.py`) |
 | Memory | SQLite (`backend/memory.py`, `backend/database.py`) |
 | RAG / vector DB | ChromaDB (persistent, local) with all-MiniLM-L6-v2 embeddings; FAISS + TF-IDF offline fallback (`backend/rag.py`) |
-| LLM | Mock by default; optional Anthropic or OpenAI (`backend/llm.py`) |
+| LLM | Mock by default; optional local model through Ollama, Anthropic or OpenAI (`backend/llm.py`) |
 | Frontend | React + Vite + TypeScript, Tailwind CSS, Recharts, Leaflet with OpenStreetMap |
 | Data | JSON files in `data/`: 8 vehicles (named Tesla Model 3, Toyota Prius, Ford Transit, Mercedes Sprinter, Jaguar I-PACE, Volvo Truck, Hyundai Ioniq 5, Nissan Leaf), 5 road segments, 20 incidents, 7 scenarios, plus random dummy traffic from the Playground |
 
@@ -261,7 +261,7 @@ lists the record IDs it used as evidence:
 - `ALT-…` alerts
 - `INC-…` incidents
 
-It runs in one of two modes:
+It runs in one of three modes:
 
 - **Rule-based (default, no API key).** Keyword rules pick the question type, then the answer is assembled from
   the matching records.
@@ -273,6 +273,23 @@ It runs in one of two modes:
   - The dashboard shows every tool call Claude made.
   - A citation check flags any ID in the answer that no tool returned.
   - If the API call fails, the rule-based answer is shown instead.
+
+- **Local model, free (`LLM_PROVIDER=ollama`).** A model running on your own machine, through Ollama's
+  OpenAI-compatible API. No API key, and no data leaves the computer. The rules pick and retrieve the records,
+  then the local model only phrases the answer (`llm._local`). Any answer that cites an ID the records did not
+  contain, is cut off, or times out is replaced by the grounded rule-based answer. Answers take about 2 seconds
+  with `qwen2.5:7b` on an Apple Silicon Mac.
+  Setup:
+  ```bash
+  brew install ollama && ollama serve        # or download Ollama from ollama.com
+  ollama pull qwen2.5:7b                     # about 4.7 GB
+  # in autonomous-vehicle-agent/.env
+  LLM_PROVIDER=ollama
+  ```
+  On Apple Silicon, Ollama uses the GPU through Metal with no extra settings (check with `ollama ps`: it
+  should say 100% GPU). Set `OLLAMA_MODEL` to use another model.
+  *Experimental:* `OLLAMA_MODE=agent` lets the local model run the tool-calling loop (`ask_local`). In testing
+  a 7B model was too unreliable at choosing tools and citing records, so it is off by default.
 
 **Design choice:** the LLM is autonomous only on the research side. Safety decisions (confidence, alerts) stay
 rule-based and deterministic. Claude can read memory, but it cannot send alerts or change scores.

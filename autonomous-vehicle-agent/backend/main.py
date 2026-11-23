@@ -24,6 +24,12 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 database.init_db()
 rag_index.build()
 
+if llm.provider() == "ollama":  # load the local model in the background so the first answer is fast
+    import threading
+
+    from backend import research_agent
+    threading.Thread(target=research_agent.warm_up_local_model, daemon=True).start()
+
 
 class ReportIn(BaseModel):
     vehicle_id: str

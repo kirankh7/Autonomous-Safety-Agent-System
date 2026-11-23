@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Activity, Bot, ExternalLink, FlaskConical, Gamepad2, LayoutDashboard, Map, ShieldAlert } from "lucide-react";
+import { Activity, Bot, ExternalLink, FlaskConical, Gamepad2, Home, LayoutDashboard, Map, ShieldAlert } from "lucide-react";
 import type { AppState, ChatMessage, Run, Scenario } from "./types";
 import { api } from "./api";
 import Dashboard from "./pages/Dashboard";
@@ -71,6 +71,11 @@ export default function App() {
           </div>
         </div>
         <nav className="flex-1 space-y-1 p-2">
+          <a href="/home.html"
+             className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-ink-2 transition hover:bg-surface-2">
+            <Home size={16} />
+            Project Home
+          </a>
           {PAGES.map(({ key, label, Icon }) => (
             <button key={key} onClick={() => setPage(key)}
                     className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${

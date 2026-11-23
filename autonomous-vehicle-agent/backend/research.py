@@ -6,6 +6,8 @@ The intent is detected with simple keyword rules so the behaviour is easy to fol
 """
 import re
 
+import os
+
 from backend import llm, memory
 from backend import tools as T
 
@@ -40,6 +42,9 @@ def _target_hazard(question: str, vehicle: dict | None) -> dict | None:
             return memory.get_hazard(alerts[-1]["hazard_id"])
     hazards = memory.all_hazards()
     return max(hazards, key=lambda h: (h["last_report_t"], h["id"])) if hazards else None
+
+
+ID_PATTERN = re.compile(r"\b(?:HZ|RPT|ALT|INC)-\d{3}\b")
 
 
 class Answer:
@@ -263,8 +268,8 @@ def list_alerts(a: Answer) -> None:
 # ---------- Entry point ----------
 
 def ask(question: str) -> dict:
-    """Answer a question. With LLM_PROVIDER=anthropic and an API key, Claude runs as a
-    tool-calling agent (research_agent.py); otherwise the rule-based assistant below answers."""
+    """Answer a question. With LLM_PROVIDER=anthropic and an API key, Claude (or with LLM_PROVIDER=ollama a local
+    model) runs as a tool-calling agent (research_agent.py); otherwise the rule-based assistant below answers."""
     if llm.provider() == "anthropic" and llm.has_credentials():
         from backend import research_agent
         try:
@@ -275,6 +280,17 @@ def ask(question: str) -> dict:
         except Exception as exc:  # fall back to the rule-based assistant
             fallback = rule_based_ask(question)
             fallback["answer"] += f"\n\n(Claude agent unavailable: {type(exc).__name__}: {exc}. Showing the rule-based answer.)"
+            return fallback
+    if llm.provider() == "ollama" and os.getenv("OLLAMA_MODE") == "agent":
+        from backend import research_agent
+        try:
+            result = research_agent.ask_local(question)
+            return {"question": question, "agent": "Research & Memory Agent",
+                    "mode": f"ollama agent ({result['model']})",
+                    "intent": "llm_tool_use", **result}
+        except Exception as exc:  # e.g. Ollama not running: fall back to the rule-based assistant
+            fallback = rule_based_ask(question)
+            fallback["answer"] += f"\n\n(Local model unavailable: {type(exc).__name__}. Showing the rule-based answer.)"
             return fallback
     return rule_based_ask(question)
 
@@ -319,16 +335,19 @@ def rule_based_ask(question: str) -> dict:
     mock_answer = "\n".join(a.lines)
     mode = llm.provider()
     answer = None
-    if mode == "openai" and llm.has_credentials():
+    if mode in ("openai", "ollama") and llm.has_credentials():
         try:
             answer = llm.generate(question, a.records + a.lines)
+            known = set(ID_PATTERN.findall(" ".join(a.records + a.lines)))
+            if answer and not set(ID_PATTERN.findall(answer)) <= known:
+                answer = None  # the model cited an ID it was not given: use the grounded answer
         except Exception as exc:  # fall back to the grounded mock answer
             mock_answer += f"\n\n(LLM call failed: {type(exc).__name__}; showing the mock answer.)"
     return {
         "question": question,
         "agent": "Research & Memory Agent",
         "answer": answer or mock_answer,
-        "mode": mode if answer else "mock",
+        "mode": f"{mode} (local)" if answer and mode == "ollama" else (mode if answer else "mock"),
         "intent": a.intent,
         "evidence": list(a.evidence.values()),
         "tools_used": a.tools,

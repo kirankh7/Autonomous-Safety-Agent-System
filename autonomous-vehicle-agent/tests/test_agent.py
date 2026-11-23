@@ -155,6 +155,75 @@ def test_claude_research_agent_loop_with_fake_client(monkeypatch):
     assert [m["content"][0]["tool_use_id"] for m in history[2::2]] == ["t1", "t2"]
 
 
+def test_local_model_agent_loop_with_fake_client():
+    """The Ollama (OpenAI-style) loop runs tools the model asks for and checks its citations."""
+    from types import SimpleNamespace as NS
+
+    from backend import research_agent
+
+    report("CAR-001", 500)
+    report("CAR-002", 450, t=40)
+
+    def call(cid, name, args):
+        return NS(id=cid, function=NS(name=name, arguments=args))
+
+    turns = [
+        NS(content="", tool_calls=[call("c1", "get_vehicle_reports", '{"hazard_id": "HZ-001"}')]),
+        NS(content="", tool_calls=[call("c2", "get_hazard", '{"hazard_id": "HZ-404"}')]),   # bad ID
+        NS(content="CAR-001 [RPT-001] and CAR-002 [RPT-002] confirmed [HZ-001]. Also [INC-999].",
+           tool_calls=None),
+    ]
+    sent = []
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            sent.append(kwargs)
+            return NS(choices=[NS(message=turns[len(sent) - 1], finish_reason="stop")])
+
+    client = NS(chat=NS(completions=FakeCompletions()))
+    result = research_agent.ask_local("How many vehicles confirmed it?", client=client)
+
+    assert [s["tool"] for s in result["agent_steps"]] == ["get_vehicle_reports", "get_hazard"]
+    assert result["agent_steps"][1]["result"].startswith("Error")      # bad tool input is reported
+    assert {e["id"] for e in result["evidence"]} == {"RPT-001", "RPT-002", "HZ-001"}
+    assert result["unverified_citations"] == ["INC-999"]
+    assert sent[0]["temperature"] == 0 and len(sent[0]["tools"]) == len(research_agent.TOOLS)
+    assert [m["role"] for m in sent[-1]["messages"]] == [
+        "system", "user", "assistant", "tool", "assistant", "tool"]
+
+
+def test_local_model_cut_off_answer_raises_so_the_caller_falls_back():
+    """A model that hits the token cap (a repetition loop) must not return a half answer."""
+    from types import SimpleNamespace as NS
+
+    import pytest
+
+    from backend import research_agent
+
+    class Looping:
+        def create(self, **kwargs):
+            assert kwargs["max_tokens"] == research_agent.LOCAL_MAX_TOKENS
+            return NS(choices=[NS(message=NS(content="again and again", tool_calls=None),
+                                  finish_reason="length")])
+
+    with pytest.raises(RuntimeError):
+        research_agent.ask_local("Anything?", client=NS(chat=NS(completions=Looping())))
+
+
+def test_local_phrasing_is_used_only_when_it_cites_known_ids(monkeypatch):
+    """The local model phrases the grounded answer; an invented ID makes the rule-based answer win."""
+    from backend import llm
+
+    report("CAR-001", 500)
+    monkeypatch.setattr(llm, "provider", lambda: "ollama")
+    monkeypatch.setattr(llm, "generate", lambda q, recs: "One hazard is active [HZ-001].")
+    good = research.rule_based_ask("What are the current hazards?")
+    assert good["mode"] == "ollama (local)" and good["answer"].startswith("One hazard")
+    monkeypatch.setattr(llm, "generate", lambda q, recs: "Hazard [HZ-999] is active.")
+    bad = research.rule_based_ask("What are the current hazards?")
+    assert bad["mode"] == "mock" and "HZ-999" not in bad["answer"]
+
+
 def test_new_hazard_uses_two_way_history_loop():
     result = report("CAR-001", 500)
     kinds = [(m["sender"], m["receiver"], m["kind"], m["protocol"]) for m in result["messages"]]

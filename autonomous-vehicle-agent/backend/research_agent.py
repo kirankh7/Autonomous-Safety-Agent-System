@@ -1,6 +1,6 @@
 """LLM-driven Research Assistant: Claude decides which memory tools to call (tool use / ReAct).
 
-Used when LLM_PROVIDER=anthropic. Claude gets read-only tools over short-term memory, long-term
+Used when LLM_PROVIDER=anthropic (Claude) or LLM_PROVIDER=ollama (a local model, ask_local). Claude gets read-only tools over short-term memory, long-term
 memory and the RAG index; it cannot send alerts or change confidence, which stay rule-based.
 The loop is written out by hand so every tool call can be shown in the dashboard trace.
 Every ID cited in the final answer is checked against the records the tools actually returned.
@@ -17,6 +17,8 @@ from backend import memory
 from backend import tools as T
 
 MAX_TURNS = 8
+LOCAL_MAX_TURNS = 5      # a local 7B model should need at most a few lookups
+LOCAL_MAX_TOKENS = 350   # hard cap per model call
 ID_PATTERN = re.compile(r"\b(?:HZ|RPT|ALT|INC)-\d{3}\b")
 
 SYSTEM_PROMPT = """You are the Research Assistant of the Research & Memory Agent (Agent 4) in a simulated \
@@ -40,6 +42,22 @@ Format the answer as signals, not prose:
 - Line 1: the direct answer in under 15 words, with the key ID.
 - Then at most 3 bullets, each under 12 words, in the style "Tesla Model 3 report [RPT-001] -> 0.50 caution".
 - No headings, bold text, background or restating the question. Under 60 words in total."""
+
+LOCAL_FORMAT = """Answer format (follow exactly, do not print these instructions):
+- First a one-sentence direct answer (under 15 words) naming the key ID.
+- Then at most 3 short bullets in the style "Tesla Model 3 report [RPT-001] -> 0.50 caution".
+- No headings, no bold text, under 60 words in total.
+
+Example question: How many vehicles confirmed the hazard?
+Example answer:
+2 vehicles confirmed hazard [HZ-001].
+- Tesla Model 3 report [RPT-001] -> 0.50 caution
+- Toyota Prius report [RPT-002] -> 0.70 verified
+
+Rules for small models: call get_hazard or get_vehicle_reports BEFORE citing any [RPT-...] or [HZ-...] ID, \
+and only cite IDs that appear in a tool result. Stop as soon as you have answered."""
+
+LOCAL_SYSTEM_PROMPT = SYSTEM_PROMPT.split("Format the answer as signals")[0] + LOCAL_FORMAT
 
 TOOLS = [
     {"name": "list_hazards",
@@ -227,6 +245,11 @@ def ask(question: str) -> dict:
         raise RuntimeError(f"No final answer after {MAX_TURNS} turns.")
 
     answer = "".join(b.text for b in response.content if b.type == "text").strip()
+    return _package(answer, steps, seen_ids, records, model)
+
+
+def _package(answer: str, steps: list, seen_ids: set, records: dict, model: str) -> dict:
+    """Check every cited ID against what the tools returned and build the response."""
     cited = list(dict.fromkeys(ID_PATTERN.findall(answer)))
     unverified = [c for c in cited if c not in seen_ids]
     evidence = [records.get(c, {"id": c, "kind": _kind(c), "summary": "Returned by a tool call."})
@@ -234,6 +257,70 @@ def ask(question: str) -> dict:
     return {"answer": answer, "evidence": evidence, "agent_steps": steps,
             "unverified_citations": unverified,
             "tools_used": list(dict.fromkeys(s["tool"] for s in steps)), "model": model}
+
+
+def warm_up_local_model() -> None:
+    """Load the local model into GPU memory so the first real question is fast. Never raises."""
+    try:
+        make_local_client().chat.completions.create(
+            model=os.getenv("OLLAMA_MODEL", "qwen2.5:7b"), max_tokens=1,
+            messages=[{"role": "user", "content": "hi"}])
+    except Exception:
+        pass
+
+
+def make_local_client():
+    """OpenAI-compatible client for a local model server (Ollama by default)."""
+    from openai import OpenAI
+
+    return OpenAI(base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
+                  api_key="ollama", timeout=45, max_retries=0)
+
+
+def ask_local(question: str, client=None) -> dict:
+    """Same ReAct tool-calling loop as ask(), but on a local model through the OpenAI-compatible
+    API (LLM_PROVIDER=ollama). The tools, the read-only rule and the citation check are identical."""
+    client = client or make_local_client()
+    model = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+    tools = [{"type": "function",
+              "function": {"name": t["name"], "description": t["description"],
+                           "parameters": t["input_schema"]}} for t in TOOLS]
+    messages = [{"role": "system", "content": LOCAL_SYSTEM_PROMPT}, {"role": "user", "content": question}]
+    steps, seen_ids, records = [], set(), {}
+
+    for _ in range(LOCAL_MAX_TURNS):
+        # max_tokens stops a small model from looping forever; a cut-off answer falls back to rules.
+        response = client.chat.completions.create(
+            model=model, messages=messages, tools=tools, temperature=0,
+            max_tokens=LOCAL_MAX_TOKENS, frequency_penalty=0.3)
+        if response.choices[0].finish_reason == "length":
+            raise RuntimeError("The local model did not finish its answer.")
+        message = response.choices[0].message
+        if not message.tool_calls:
+            return _package((message.content or "").strip(), steps, seen_ids, records, model)
+
+        messages.append({"role": "assistant", "content": message.content or "",
+                         "tool_calls": [{"id": c.id, "type": "function",
+                                         "function": {"name": c.function.name,
+                                                      "arguments": c.function.arguments}}
+                                        for c in message.tool_calls]})
+        reason = (message.content or "").strip()
+        for call in message.tool_calls:
+            try:
+                args = json.loads(call.function.arguments or "{}")
+                result = run_tool(call.function.name, args)
+                text = json.dumps(result, default=str)
+                seen_ids.update(ID_PATTERN.findall(text))
+                _collect(result, records)
+                steps.append({"reason": reason, "tool": call.function.name, "input": args,
+                              "result": _brief(result)})
+            except (ValueError, TypeError, json.JSONDecodeError) as exc:
+                text = f"Error: {exc}"
+                steps.append({"reason": reason, "tool": call.function.name,
+                              "input": call.function.arguments, "result": text})
+            messages.append({"role": "tool", "tool_call_id": call.id, "content": text})
+            reason = ""
+    raise RuntimeError(f"No final answer after {LOCAL_MAX_TURNS} turns.")
 
 
 def _kind(record_id: str) -> str:
