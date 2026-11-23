@@ -97,17 +97,19 @@ The public repository contains the README with architecture, setup and usage, th
 
 **Elevator pitch (optional, ungraded, 90 seconds):** https://www.youtube.com/shorts/_W1MNYxP3tI
 
-**Slide deck (10 slides):** https://github.com/kirankh7/Autonomous-Safety-Agent-System/blob/main/docs/Final-Presentation-Kiran-Haridas.pptx. The deck uses screenshots of the running dashboard. Its slides are:
+**Slide deck (10 slides):** https://github.com/kirankh7/Autonomous-Safety-Agent-System/blob/main/docs/Final-Presentation-Kiran-Haridas.pptx. The deck uses screenshots of the running dashboard and has speaker notes on every slide. The presentation outline below shows what is on each slide, the time budget and the key points.
 
-| # | Slide | Main point |
-|---|---|---|
-| 1 | Title and problem | A shared safety layer so a vehicle can use what another vehicle sees |
-| 2 | Goal, users and scope | Early, verified, auditable warnings with few false alarms |
-| 3 | Architecture | Four agents in one LangGraph workflow, with a history loop and escalation |
-| 4 | Live demo: fog | Confidence 0.50, 0.70, 0.40, then 0.10 resolved |
-| 5 | Memory changes a decision | Retrieved history lifts a flooding report from 0.50 to 0.65 |
-| 6 | Safety and human oversight | Guardrails and escalation to the fleet operator |
-| 7 | Research Assistant | Cited, grounded answers from a local Qwen model |
-| 8 | Evaluation | Hybrid: 0 false warnings and 25/25 same decisions |
-| 9 | Design evolution and decisions | Rules decide, the LLM explains; two-tier memory; typed messages |
-| 10 | Limits, next steps and repository | Public GitHub repository with README, code and tests |
+| # | Slide | Time | Content on the slide | Say (key points) |
+|---|---|---|---|---|
+| 1 | Title and problem | 0:00-0:50 | Title, name, one picture of a vehicle in fog with a hidden stopped truck 500 m ahead | The vehicle cannot see what another vehicle already sees. A shared safety layer fixes that. Simulation only, advisory only. |
+| 2 | Goal, users and scope | 0:50-1:30 | Goal, users (fleet operators, vehicles), in scope, out of scope, constraints | Early, verified, auditable hazard warnings with few false alarms. Synthetic data. Demonstration confidence rules. |
+| 3 | Architecture | 1:30-3:00 | The four-agent LangGraph diagram with the history loop and the operator escalation | Why an agent and not one prompt. What each agent does. Hybrid graph, typed messages, failover to rules. |
+| 4 | Live demo: fog | 3:00-4:30 | Dashboard, fog scenario | 0.50 caution, 0.70 verified, clear reports drop it to 0.40, then 0.10 resolved, and the outcome is learned. |
+| 5 | Memory and retrieval | 4:30-5:15 | Dashboard, flooding scenario, "+0.15 history" signal | ChromaDB RAG changes a decision on a cold-start road: 0.50 to 0.65. Live evidence still outranks history. |
+| 6 | Safety and human oversight | 5:15-6:15 | Dashboard, conflicting-reports scenario, escalation alert | Guardrails, no resolve on one clear report, escalation to the operator after 120 s, advisory only. |
+| 7 | Research Assistant | 6:15-6:45 | Chat with cited record IDs | Grounded answers, citation check, local Qwen model on the GPU. The LLM explains but never decides. |
+| 8 | Evaluation | 6:45-8:00 | Benchmark table (four configurations) | Hybrid: 0 false warnings, 25/25 same decisions, 9 retrieval calls instead of 25, about half the latency. 24 tests pass. |
+| 9 | Design evolution and decisions | 8:00-8:40 | Timeline of refinements across the program, plus three decisions | Rules decide, LLM explains (no Tree-of-Thought). Two-tier memory. Typed messages. |
+| 10 | Limits, next steps, repository | 8:40-9:30 | Limitations, future work, GitHub URL, README screenshot | Synthetic data, small benchmark, demo thresholds. Public repo with README, setup steps and tests. |
+
+**Pre-submission checks:** the report links to a public repository; the video is about 8-10 minutes and shows or names the repository; the slides or visuals are visible throughout; the numbers in the slides (0.50, 0.70, 0.40, 0.10, 0.65, 25/25 same decisions, 24 tests) match this report; and the elevator pitch is labelled optional.
