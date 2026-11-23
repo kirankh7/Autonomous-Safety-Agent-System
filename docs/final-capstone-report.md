@@ -4,7 +4,8 @@
 **Program:** Carnegie Mellon University, Agentic AI
 **Agent option:** Research Assistant
 **Public repository:** https://github.com/kirankh7/Autonomous-Safety-Agent-System
-**Presentation video (main):** https://youtu.be/obzEvUXOvYQ
+**Presentation video:** https://youtu.be/obzEvUXOvYQ
+**NotebookLM version:** https://youtu.be/ls9-O_ZwTVY
 **Elevator pitch (optional):** https://www.youtube.com/shorts/_W1MNYxP3tI
 **Slide deck:** https://github.com/kirankh7/Autonomous-Safety-Agent-System/blob/main/docs/Final-Presentation-Kiran-Haridas.pptx
 
@@ -91,7 +92,9 @@ The public repository contains the README with architecture, setup and usage, th
 
 ## 12. Presentation, Videos and Slides
 
-**Presentation video (required, 8-10 minutes):** https://youtu.be/obzEvUXOvYQ. This is a NotebookLM-generated version of the project presentation.
+**Presentation video (required, 8-10 minutes):** https://youtu.be/obzEvUXOvYQ
+
+**NotebookLM version:** https://youtu.be/ls9-O_ZwTVY. This is a NotebookLM-generated version of the project presentation.
 
 **Summary:** The presentation explains an Autonomous Vehicle Intercommunication Safety Agent System, in which four cooperating agents verify hazard reports from a simulated fleet, warn the vehicles that need it, and learn from outcomes. It covers the hybrid LangGraph architecture and key design decisions, the evaluation results (the production design matches the most thorough setup with zero false warnings at about half the cost), the safety and human-oversight design, the limitations, and the public GitHub repository.
 
